@@ -1,0 +1,18 @@
+# Env files
+.env
+frontend/.env
+
+# Go
+backend/vendor/
+*.exe
+*.test
+
+# Node
+frontend/node_modules/
+frontend/dist/
+
+# OS
+.DS_Store
+
+.SPEC.md
+.PROJECT_STRUCTURE.md
