@@ -69,8 +69,15 @@ func handleBet(state *BlackjackState, playerID string, action models.Action) (*B
 	hole.Hidden = true
 	state.DealerHand.Cards = append(state.DealerHand.Cards, hole)
 
-	if handValue(p.Hands[0].Cards) == 21 {
+	playerBJ := isBlackjack(p.Hands[0].Cards)
+	if playerBJ {
 		p.Hands[0].Status = "blackjack"
+	}
+	// Dealer peeks for blackjack; a natural on either side ends the round.
+	if playerBJ || isBlackjack(state.DealerHand.Cards) {
+		if !playerBJ {
+			p.Hands[0].Status = "stand"
+		}
 		runDealer(state)
 		state.Phase = "resolved"
 		return state, nil
@@ -91,10 +98,16 @@ func handlePlayerAction(state *BlackjackState, playerID string, action models.Ac
 	switch action.Type {
 	case "hit":
 		hand.Cards = append(hand.Cards, Draw(&state.Deck))
-		if handValue(hand.Cards) > 21 {
+		switch v := handValue(hand.Cards); {
+		case v > 21:
 			hand.Status = "bust"
-			state.Phase = "resolved"
+		case v == 21:
+			hand.Status = "stand"
+		default:
+			return state, nil
 		}
+		runDealer(state)
+		state.Phase = "resolved"
 	case "stand":
 		hand.Status = "stand"
 		runDealer(state)
@@ -119,13 +132,52 @@ func handlePlayerAction(state *BlackjackState, playerID string, action models.Ac
 	return state, nil
 }
 
+// dealerMinSafeRatio: the dealer keeps drawing while more than this share of
+// the remaining deck would leave its hand at 21 or less.
+const dealerMinSafeRatio = 0.35
+
+// runDealer reveals the hole card and plays the dealer's hand. The dealer
+// looks at the remaining deck and draws while the chance of not busting on
+// the next card is above dealerMinSafeRatio. The dealer only draws if some
+// player hand is still standing (not bust or blackjack).
 func runDealer(state *BlackjackState) {
 	for i := range state.DealerHand.Cards {
 		state.DealerHand.Cards[i].Hidden = false
 	}
-	for handValue(state.DealerHand.Cards) < 17 {
+	if !anyHandStanding(state) || isBlackjack(state.DealerHand.Cards) {
+		return
+	}
+	for safeDrawRatio(state.DealerHand.Cards, state.Deck) > dealerMinSafeRatio {
 		state.DealerHand.Cards = append(state.DealerHand.Cards, Draw(&state.Deck))
 	}
+}
+
+// safeDrawRatio returns the share of cards in deck that would keep hand at
+// 21 or less if drawn next.
+func safeDrawRatio(hand, deck []models.Card) float64 {
+	if len(deck) == 0 {
+		return 0
+	}
+	safe := 0
+	next := append(append([]models.Card{}, hand...), models.Card{})
+	for _, c := range deck {
+		next[len(next)-1] = c
+		if handValue(next) <= 21 {
+			safe++
+		}
+	}
+	return float64(safe) / float64(len(deck))
+}
+
+func anyHandStanding(state *BlackjackState) bool {
+	for _, p := range state.Players {
+		for _, h := range p.Hands {
+			if h.Status == "stand" {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func (e *BlackjackEngine) GetStateForPlayer(raw any, playerID string) any {
@@ -158,6 +210,7 @@ func (e *BlackjackEngine) ResolveRound(raw any) (any, []models.ChipChange, error
 
 	dealerTotal := handValue(state.DealerHand.Cards)
 	dealerBust := dealerTotal > 21
+	dealerBJ := isBlackjack(state.DealerHand.Cards)
 	var changes []models.ChipChange
 
 	for i := range state.Players {
@@ -167,12 +220,18 @@ func (e *BlackjackEngine) ResolveRound(raw any) (any, []models.ChipChange, error
 
 		switch hand.Status {
 		case "blackjack":
-			payout = hand.Bet + hand.Bet*3/2
+			if dealerBJ {
+				payout = hand.Bet
+			} else {
+				payout = hand.Bet + hand.Bet*3/2
+			}
 		case "bust":
 			payout = 0
 		case "stand":
 			pt := handValue(hand.Cards)
-			if dealerBust || pt > dealerTotal {
+			if dealerBJ {
+				payout = 0
+			} else if dealerBust || pt > dealerTotal {
 				payout = hand.Bet * 2
 			} else if pt == dealerTotal {
 				payout = hand.Bet
@@ -192,6 +251,18 @@ func findPlayer(state *BlackjackState, id string) int {
 		}
 	}
 	return -1
+}
+
+// HandValue returns the best blackjack total of the visible cards.
+func HandValue(cards []models.Card) int { return handValue(cards) }
+
+func isBlackjack(cards []models.Card) bool {
+	if len(cards) != 2 {
+		return false
+	}
+	revealed := []models.Card{cards[0], cards[1]}
+	revealed[0].Hidden, revealed[1].Hidden = false, false
+	return handValue(revealed) == 21
 }
 
 func handValue(cards []models.Card) int {

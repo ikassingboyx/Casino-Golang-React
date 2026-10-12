@@ -8,6 +8,8 @@ import PokerPage from './pages/PokerPage'
 import BaccaratPage from './pages/BaccaratPage'
 import RoulettePage from './pages/RoulettePage'
 import ProfilePage from './pages/ProfilePage'
+import TestHomePage from './pages/TestHomePage'
+import BlackjackTestPage from './pages/BlackjackTestPage'
 import { useAuthStore } from './store/authStore'
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
@@ -19,7 +21,10 @@ export default function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/" element={<Navigate to="/lobby" replace />} />
+        {/* Temporary test pages (no login) */}
+        <Route path="/" element={<TestHomePage />} />
+        <Route path="/test/blackjack" element={<BlackjackTestPage />} />
+
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
 

@@ -1,4 +1,4 @@
-import { BaseGameState, BasePlayer, Card } from './game'
+import type { BaseGameState, BasePlayer, Card } from './game'
 
 export type HandStatus = 'playing' | 'stand' | 'bust' | 'blackjack' | 'double'
 

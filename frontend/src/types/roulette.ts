@@ -1,4 +1,4 @@
-import { BaseGameState, BasePlayer } from './game'
+import type { BaseGameState, BasePlayer } from './game'
 
 export type BetType =
   | 'straight' | 'split' | 'street' | 'corner' | 'six_line'

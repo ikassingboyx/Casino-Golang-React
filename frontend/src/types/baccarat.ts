@@ -1,4 +1,4 @@
-import { BaseGameState, BasePlayer, Card } from './game'
+import type { BaseGameState, BasePlayer, Card } from './game'
 
 export interface BaccaratHand {
   cards: Card[]

@@ -9,6 +9,7 @@ import (
 	"casino/internal/middleware"
 	"casino/internal/models"
 	"casino/internal/ws"
+	"flag"
 	"fmt"
 	"log"
 	"os"
@@ -77,27 +78,35 @@ func printState(s *game.BlackjackState) {
 }
 
 func main() {
-	runBlackjackConsole()
-	return
+	console := flag.Bool("console", false, "play blackjack in the terminal instead of starting the server")
+	flag.Parse()
+	if *console {
+		runBlackjackConsole()
+		return
+	}
 
 	cfg := config.Load()
-	database, err := db.Connect(cfg.DatabaseURL)
-	if err != nil {
-		log.Fatalf("failed to connect to database: %v", err)
-	}
-	defer database.Close()
-
-	if err := db.RunMigrations(cfg.DatabaseURL); err != nil {
-		log.Fatalf("failed to run migrations: %v", err)
-	}
-
-	hub := ws.NewHub()
-	go hub.Run()
 
 	r := gin.Default()
 	r.Use(middleware.CORS(cfg.FrontendURL))
 
-	handlers.RegisterRoutes(r, database, hub, cfg)
+	// Temporary in-memory game API; works without a database.
+	handlers.RegisterDevRoutes(r)
+
+	database, err := db.Connect(cfg.DatabaseURL)
+	if err != nil {
+		log.Printf("WARNING: database unavailable (%v); serving dev routes only", err)
+	} else {
+		defer database.Close()
+		if err := db.RunMigrations(cfg.DatabaseURL); err != nil {
+			log.Fatalf("failed to run migrations: %v", err)
+		}
+
+		hub := ws.NewHub()
+		go hub.Run()
+
+		handlers.RegisterRoutes(r, database, hub, cfg)
+	}
 
 	log.Printf("server starting on :%s", cfg.Port)
 	if err := r.Run(":" + cfg.Port); err != nil {

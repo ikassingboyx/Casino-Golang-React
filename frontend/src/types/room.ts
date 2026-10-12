@@ -1,4 +1,4 @@
-import { GameType } from './game'
+import type { GameType } from './game'
 
 export interface RoomSettings {
   bigBlind?: number

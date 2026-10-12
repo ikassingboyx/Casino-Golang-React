@@ -1,4 +1,4 @@
-import { BaseGameState, BasePlayer, Card } from './game'
+import type { BaseGameState, BasePlayer, Card } from './game'
 
 export type PokerPlayerStatus = 'active' | 'folded' | 'all_in' | 'out'
 
