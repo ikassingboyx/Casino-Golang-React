@@ -1,4 +1,4 @@
-import http from './http'
+import http, { API_URL } from './http'
 import type { AuthToken } from '../types/user'
 
 export const register = (email: string, password: string, displayName: string) =>
@@ -7,8 +7,10 @@ export const register = (email: string, password: string, displayName: string) =
 export const login = (email: string, password: string) =>
   http.post<AuthToken>('/auth/login', { email, password })
 
-export const getGoogleOAuthURL = () =>
-  `${import.meta.env.VITE_API_URL ?? 'http://localhost:8080/api'}/auth/google`
+export type OAuthProvider = 'google' | 'facebook' | 'github'
 
-export const getFacebookOAuthURL = () =>
-  `${import.meta.env.VITE_API_URL ?? 'http://localhost:8080/api'}/auth/facebook`
+// Full-page navigation target that starts the provider's login flow.
+export const oauthLoginURL = (provider: OAuthProvider) => `${API_URL}/auth/${provider}`
+
+// Providers that are configured on the backend.
+export const getOAuthProviders = () => http.get<{ providers: OAuthProvider[] }>('/auth/providers')

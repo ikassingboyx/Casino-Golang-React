@@ -21,3 +21,7 @@ frontend/dist/
 frontend/public/assets/**
 !frontend/public/assets/**/
 !frontend/public/assets/**/README.md
+
+# Locally installed Claude skills and agent tooling
+.claude/skills/
+.agents/

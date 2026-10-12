@@ -2,13 +2,20 @@ package db
 
 import (
 	"database/sql"
+	"embed"
 	"fmt"
 
 	"github.com/golang-migrate/migrate/v4"
 	"github.com/golang-migrate/migrate/v4/database/postgres"
-	_ "github.com/golang-migrate/migrate/v4/source/file"
+	"github.com/golang-migrate/migrate/v4/source/iofs"
 	_ "github.com/lib/pq"
 )
+
+// Migrations are compiled into the binary so the server can run them from
+// any working directory or host.
+//
+//go:embed migrations/*.sql
+var migrationsFS embed.FS
 
 func Connect(databaseURL string) (*sql.DB, error) {
 	db, err := sql.Open("postgres", databaseURL)
@@ -21,6 +28,7 @@ func Connect(databaseURL string) (*sql.DB, error) {
 	return db, nil
 }
 
+// RunMigrations applies all pending migrations on its own connection.
 func RunMigrations(databaseURL string) error {
 	db, err := sql.Open("postgres", databaseURL)
 	if err != nil {
@@ -28,12 +36,20 @@ func RunMigrations(databaseURL string) error {
 	}
 	driver, err := postgres.WithInstance(db, &postgres.Config{})
 	if err != nil {
+		db.Close()
 		return err
 	}
-	m, err := migrate.NewWithDatabaseInstance("file://internal/db/migrations", "postgres", driver)
+	source, err := iofs.New(migrationsFS, "migrations")
 	if err != nil {
+		db.Close()
 		return err
 	}
+	m, err := migrate.NewWithInstance("iofs", source, "postgres", driver)
+	if err != nil {
+		db.Close()
+		return err
+	}
+	defer m.Close()
 	if err := m.Up(); err != nil && err != migrate.ErrNoChange {
 		return err
 	}

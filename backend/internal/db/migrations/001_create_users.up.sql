@@ -1,5 +1,3 @@
--- +migrate Up
-CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
 CREATE TABLE users (
     id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -10,10 +8,7 @@ CREATE TABLE users (
     oauth_provider      VARCHAR(20),
     oauth_id            VARCHAR(255),
     chips               BIGINT NOT NULL DEFAULT 1000,
-    last_daily_bonus_at TIMESTAMP,
-    created_at          TIMESTAMP NOT NULL DEFAULT NOW(),
-    updated_at          TIMESTAMP NOT NULL DEFAULT NOW()
+    last_daily_bonus_at TIMESTAMPTZ,
+    created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-
--- +migrate Down
-DROP TABLE users;

@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import LoginPage from './pages/LoginPage'
 import RegisterPage from './pages/RegisterPage'
+import AuthCallbackPage from './pages/AuthCallbackPage'
 import LobbyPage from './pages/LobbyPage'
 import RoomPage from './pages/RoomPage'
 import BlackjackPage from './pages/BlackjackPage'
@@ -21,12 +22,13 @@ export default function App() {
   return (
     <BrowserRouter>
       <Routes>
-        {/* Temporary test pages (no login) */}
-        <Route path="/" element={<TestHomePage />} />
-        <Route path="/test/blackjack" element={<BlackjackTestPage />} />
+        {/* Temporary test pages */}
+        <Route path="/" element={<PrivateRoute><TestHomePage /></PrivateRoute>} />
+        <Route path="/test/blackjack" element={<PrivateRoute><BlackjackTestPage /></PrivateRoute>} />
 
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
+        <Route path="/auth/callback" element={<AuthCallbackPage />} />
 
         <Route path="/lobby" element={<PrivateRoute><LobbyPage /></PrivateRoute>} />
         <Route path="/room/:code" element={<PrivateRoute><RoomPage /></PrivateRoute>} />

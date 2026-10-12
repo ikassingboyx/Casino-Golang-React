@@ -22,10 +22,9 @@ func RegisterRoutes(r *gin.Engine, db *sql.DB, hub *ws.Hub, cfg *config.Config) 
 	// Auth (public)
 	api.POST("/auth/register", authH.Register)
 	api.POST("/auth/login", authH.Login)
-	api.GET("/auth/google", authH.GoogleRedirect)
-	api.GET("/auth/google/callback", authH.GoogleCallback)
-	api.GET("/auth/facebook", authH.FacebookRedirect)
-	api.GET("/auth/facebook/callback", authH.FacebookCallback)
+	api.GET("/auth/providers", authH.Providers)
+	api.GET("/auth/:provider", authH.OAuthRedirect)
+	api.GET("/auth/:provider/callback", authH.OAuthCallback)
 
 	// Protected routes
 	protected := api.Group("")
