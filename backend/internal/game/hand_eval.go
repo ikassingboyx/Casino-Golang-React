@@ -19,9 +19,9 @@ const (
 )
 
 type EvaluatedHand struct {
-	Rank      HandRank
-	Cards     []models.Card // best 5-card combination
-	TieBreakers []int        // values for tie-breaking (high to low)
+	Rank        HandRank
+	Cards       []models.Card // best 5-card combination
+	TieBreakers []int         // values for tie-breaking (high to low)
 }
 
 // EvaluateHand finds the best 5-card hand from 7 cards (2 hole + 5 community).

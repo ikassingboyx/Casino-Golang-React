@@ -13,7 +13,7 @@ The main view is an illustrated casino interior where clicking on a game area op
 **Backend:** Go + Gin
 **Database:** PostgreSQL (with JSONB for game state)
 **Real-time:** WebSockets (gorilla/websocket)
-**Auth:** Email/password + Google OAuth + Facebook OAuth (JWT sessions)
+**Auth:** Google, Facebook and GitHub OAuth only (JWT sessions)
 
 ---
 
@@ -42,12 +42,15 @@ The main view is an illustrated casino interior where clicking on a game area op
 
 ### 3.1 Registration & Login
 
-Three ways to authenticate:
-1. **Email + password** — stored as bcrypt hash in `users.password_hash`
-2. **Google OAuth** — redirect to Google, get profile, upsert user with `oauth_provider='google'`
-3. **Facebook OAuth** — same flow with Facebook
+Sign-in is only through social login (no email/password accounts):
+1. **Google OAuth**
+2. **Facebook OAuth**
+3. **GitHub OAuth**
 
-On first login/register, user gets **1000 starting chips**.
+Each provider login is a row in `user_identities` (provider + provider user ID).
+A first-time login is linked to an existing user with the same *verified*
+email; otherwise a new user is created. Signing in for the first time creates
+the account, with **1000 starting chips**.
 
 JWT is returned on successful auth. Token lifetime: 7 days.
 Frontend stores JWT in `localStorage`. Axios interceptor attaches it to every request.
@@ -102,8 +105,8 @@ The modal also shows a brief description of the game and payout rules.
 
 ```
 /                   → redirects to /lobby if logged in, else /login
-/login              → login page
-/register           → register page
+/login              → login page (Google / Facebook / GitHub)
+/auth/callback      → finishes social login, stores the JWT
 /lobby              → casino interior (main view)
 /game/:type/offline → offline game (blackjack, poker, baccarat, roulette)
 /room/:code         → online room waiting area
@@ -584,7 +587,7 @@ Offline replaces the 30s timer with a manual "Spin" button.
 ### 8.1 Page Flow
 
 ```
-/login or /register
+/login
        ↓
 /lobby  ← casino interior image with 4 clickable game spots
        ↓ (click a game spot)
@@ -663,9 +666,8 @@ Manages the WS lifecycle:
 ```
 App
 ├── LoginPage
-│   └── LoginForm, OAuthButtons
-├── RegisterPage
-│   └── RegisterForm
+│   └── OAuthButtons
+├── AuthCallbackPage
 ├── LobbyPage
 │   ├── CasinoInterior          ← full-screen image
 │   │   ├── GameSpot (x4)       ← absolute positioned hotspots
@@ -726,12 +728,10 @@ App
 
 **Auth**
 ```
-POST   /api/auth/register           { email, password, displayName }
-POST   /api/auth/login              { email, password }
-GET    /api/auth/google             → redirect to Google OAuth
-GET    /api/auth/google/callback    → handle code, return JWT
-GET    /api/auth/facebook           → redirect to Facebook OAuth
-GET    /api/auth/facebook/callback  → handle code, return JWT
+GET    /api/auth/providers            → configured providers
+GET    /api/auth/:provider            → redirect to google | facebook | github
+GET    /api/auth/:provider/callback   → handle code, redirect to
+                                        <frontend>/auth/callback#token=<jwt>
 ```
 
 **Users** (JWT required)
@@ -859,16 +859,25 @@ This prevents any scenario where chips are lost due to a partial write.
 ```sql
 CREATE TABLE users (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    email           VARCHAR(255) UNIQUE NOT NULL,
-    password_hash   VARCHAR(255),
+    email           VARCHAR(255) UNIQUE,          -- NULL if the provider shares none
     display_name    VARCHAR(50) NOT NULL,
     avatar_url      VARCHAR(500),
-    oauth_provider  VARCHAR(20),
-    oauth_id        VARCHAR(255),
     chips           BIGINT NOT NULL DEFAULT 1000,
-    last_daily_bonus_at TIMESTAMP,
-    created_at      TIMESTAMP NOT NULL DEFAULT NOW(),
-    updated_at      TIMESTAMP NOT NULL DEFAULT NOW()
+    last_daily_bonus_at TIMESTAMPTZ,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+```
+
+### `user_identities`
+```sql
+CREATE TABLE user_identities (
+    id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id          UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    provider         VARCHAR(20) NOT NULL,        -- 'google', 'facebook', 'github'
+    provider_user_id VARCHAR(255) NOT NULL,
+    created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (provider, provider_user_id)
 );
 ```
 
@@ -988,9 +997,9 @@ This is the recommended implementation sequence, from simplest to most complex:
 1. `docker-compose.yml` + PostgreSQL running
 2. Go project skeleton: `main.go`, Gin setup, CORS, health endpoint
 3. DB migrations: users, rooms, games, chip_transactions
-4. Auth: email/password register + login, JWT middleware
+4. Auth: Google / Facebook / GitHub OAuth, JWT middleware
 5. React project skeleton: Vite + TypeScript + Tailwind + Zustand + React Router
-6. Login/Register pages connected to backend
+6. Login page connected to backend
 7. JWT stored in localStorage, Axios interceptor
 
 ### Phase 2 — Blackjack Offline (proves the game engine pattern)

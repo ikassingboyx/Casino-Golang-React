@@ -2,6 +2,7 @@ package game
 
 import (
 	"casino/internal/models"
+	"encoding/json"
 	"errors"
 	"fmt"
 )
@@ -12,12 +13,12 @@ func NewBlackjackEngine() *BlackjackEngine { return &BlackjackEngine{} }
 
 type BlackjackState struct {
 	models.BlackjackGameState
-	Deck []models.Card
+	Deck []models.Card `json:"deck"`
 }
 
 func (e *BlackjackEngine) StartGame(players []models.Player, settings map[string]any) (any, error) {
 	if len(players) == 0 {
-		return nil, errors.New("Not enought players to start game")
+		return nil, errors.New("not enough players to start game")
 	}
 
 	bjPlayers := make([]models.BlackjackPlayer, len(players))
@@ -180,22 +181,48 @@ func anyHandStanding(state *BlackjackState) bool {
 	return false
 }
 
+// GetStateForPlayer returns what a player may see: no deck, the dealer's hole
+// card masked while players are still acting, and hand totals filled in.
 func (e *BlackjackEngine) GetStateForPlayer(raw any, playerID string) any {
 	state := raw.(*BlackjackState)
-	if state.Phase != "player_turns" {
-		return state
-	}
-	cp := *state
-	dealerCards := make([]models.Card, len(state.DealerHand.Cards))
+	view := state.BlackjackGameState
+
+	view.DealerHand.Cards = make([]models.Card, len(state.DealerHand.Cards))
 	for i, c := range state.DealerHand.Cards {
 		if c.Hidden {
-			dealerCards[i] = models.Card{Hidden: true}
-		} else {
-			dealerCards[i] = c
+			c = models.Card{Hidden: true}
 		}
+		view.DealerHand.Cards[i] = c
 	}
-	cp.DealerHand = models.DealerHand{Cards: dealerCards}
-	return &cp
+	view.DealerHand.Value = handValue(view.DealerHand.Cards)
+
+	view.Players = make([]models.BlackjackPlayer, len(state.Players))
+	for i, p := range state.Players {
+		hands := make([]models.BlackjackHand, len(p.Hands))
+		for j, h := range p.Hands {
+			h.Value = handValue(h.Cards)
+			hands[j] = h
+		}
+		p.Hands = hands
+		view.Players[i] = p
+	}
+	return &view
+}
+
+func (e *BlackjackEngine) LoadState(data []byte) (any, error) {
+	var state BlackjackState
+	if err := json.Unmarshal(data, &state); err != nil {
+		return nil, err
+	}
+	return &state, nil
+}
+
+func (e *BlackjackEngine) PlayerChips(raw any, playerID string) int64 {
+	state := raw.(*BlackjackState)
+	if i := findPlayer(state, playerID); i >= 0 {
+		return state.Players[i].Chips
+	}
+	return 0
 }
 
 func (e *BlackjackEngine) IsRoundOver(raw any) bool {
@@ -252,9 +279,6 @@ func findPlayer(state *BlackjackState, id string) int {
 	}
 	return -1
 }
-
-// HandValue returns the best blackjack total of the visible cards.
-func HandValue(cards []models.Card) int { return handValue(cards) }
 
 func isBlackjack(cards []models.Card) bool {
 	if len(cards) != 2 {

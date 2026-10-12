@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"os"
 
 	"github.com/joho/godotenv"
@@ -37,7 +38,7 @@ func Load() *Config {
 		APIURL:      getEnv("API_URL", "http://localhost:"+port),
 		FrontendURL: getEnv("FRONTEND_URL", "http://localhost:5173"),
 		DatabaseURL: getEnv("DATABASE_URL", "postgres://casino:password@localhost:5432/casino_db?sslmode=disable"),
-		JWTSecret:   getEnv("JWT_SECRET", "change-me-in-production"),
+		JWTSecret:   os.Getenv("JWT_SECRET"),
 		JWTExpiry:   getEnv("JWT_EXPIRY", "168h"),
 
 		GoogleClientID:     os.Getenv("GOOGLE_CLIENT_ID"),
@@ -49,6 +50,21 @@ func Load() *Config {
 		GitHubClientID:     os.Getenv("GITHUB_CLIENT_ID"),
 		GitHubClientSecret: os.Getenv("GITHUB_CLIENT_SECRET"),
 	}
+}
+
+// minJWTSecretLen is the shortest accepted JWT_SECRET; anyone who knows or
+// guesses the secret can forge a login token for any user.
+const minJWTSecretLen = 32
+
+// Validate rejects settings that are unsafe to run with.
+func (c *Config) Validate() error {
+	if c.JWTSecret == "" || c.JWTSecret == "change-me-in-production" {
+		return errors.New("JWT_SECRET is not set; generate one with: openssl rand -base64 48")
+	}
+	if len(c.JWTSecret) < minJWTSecretLen {
+		return errors.New("JWT_SECRET is too short; use at least 32 characters (openssl rand -base64 48)")
+	}
+	return nil
 }
 
 func getEnv(key, fallback string) string {

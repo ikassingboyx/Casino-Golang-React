@@ -11,7 +11,6 @@ import (
 type User struct {
 	ID               UUID       `json:"id" db:"id"`
 	Email            *string    `json:"email" db:"email"`
-	PasswordHash     *string    `json:"-" db:"password_hash"`
 	DisplayName      string     `json:"displayName" db:"display_name"`
 	AvatarURL        *string    `json:"avatarUrl" db:"avatar_url"`
 	Chips            int64      `json:"chips" db:"chips"`
@@ -34,7 +33,7 @@ type OAuthProfile struct {
 
 var ErrUserNotFound = errors.New("user not found")
 
-const userColumns = `id, email, password_hash, display_name, avatar_url, chips, last_daily_bonus_at, created_at, updated_at`
+const userColumns = `id, email, display_name, avatar_url, chips, last_daily_bonus_at, created_at, updated_at`
 
 type rowQuerier interface {
 	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
@@ -43,7 +42,7 @@ type rowQuerier interface {
 func GetUserByID(ctx context.Context, db rowQuerier, id string) (*User, error) {
 	var u User
 	err := db.QueryRowContext(ctx, `SELECT `+userColumns+` FROM users WHERE id = $1`, id).Scan(
-		&u.ID, &u.Email, &u.PasswordHash, &u.DisplayName, &u.AvatarURL, &u.Chips, &u.LastDailyBonusAt, &u.CreatedAt, &u.UpdatedAt,
+		&u.ID, &u.Email, &u.DisplayName, &u.AvatarURL, &u.Chips, &u.LastDailyBonusAt, &u.CreatedAt, &u.UpdatedAt,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrUserNotFound

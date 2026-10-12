@@ -19,4 +19,22 @@ type GameEngine interface {
 
 	// ResolveRound settles bets and returns chip changes.
 	ResolveRound(state any) (any, []models.ChipChange, error)
+
+	// LoadState restores a state previously serialized with json.Marshal.
+	LoadState(data []byte) (any, error)
+
+	// PlayerChips returns the chips a player holds in the given state.
+	PlayerChips(state any, playerID string) int64
+}
+
+// NewEngine returns the engine for a game type, or false if that game is not
+// playable yet.
+func NewEngine(gameType string) (GameEngine, bool) {
+	switch gameType {
+	case "blackjack":
+		return NewBlackjackEngine(), true
+	case "roulette":
+		return NewRouletteEngine(), true
+	}
+	return nil, false
 }

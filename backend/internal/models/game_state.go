@@ -7,11 +7,11 @@ type Card struct {
 }
 
 type Player struct {
-	ID          string  `json:"id"`
-	Name        string  `json:"name"`
-	Chips       int64   `json:"chips"`
-	IsBot       bool    `json:"isBot"`
-	IsConnected bool    `json:"isConnected"`
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Chips       int64  `json:"chips"`
+	IsBot       bool   `json:"isBot"`
+	IsConnected bool   `json:"isConnected"`
 }
 
 type LastAction struct {
@@ -36,6 +36,7 @@ type ChipChange struct {
 }
 
 type Action struct {
-	Type   string `json:"action"`
-	Amount int64  `json:"amount,omitempty"`
+	Type   string        `json:"action"`
+	Amount int64         `json:"amount,omitempty"`
+	Bets   []RouletteBet `json:"bets,omitempty"` // roulette: all bets for a spin
 }

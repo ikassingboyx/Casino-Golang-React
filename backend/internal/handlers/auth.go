@@ -26,16 +26,6 @@ func NewAuthHandler(db *sql.DB, cfg *config.Config) *AuthHandler {
 	return &AuthHandler{db: db, cfg: cfg, providers: auth.OAuthProviders(cfg)}
 }
 
-func (h *AuthHandler) Register(c *gin.Context) {
-	// TODO: implement
-	c.JSON(http.StatusNotImplemented, gin.H{"error": "not implemented"})
-}
-
-func (h *AuthHandler) Login(c *gin.Context) {
-	// TODO: implement
-	c.JSON(http.StatusNotImplemented, gin.H{"error": "not implemented"})
-}
-
 // Providers lists the social login providers that are configured.
 func (h *AuthHandler) Providers(c *gin.Context) {
 	names := make([]string, 0, len(h.providers))

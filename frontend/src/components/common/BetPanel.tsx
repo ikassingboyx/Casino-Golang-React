@@ -1,16 +1,17 @@
-import Chip from '../common/Chip'
+import Chip from './Chip'
 import { BET_CHIPS } from '../../utils/chipUtils'
 
 interface Props {
   bet: number
-  chips: number
+  chips: number // available to bet
   busy: boolean
   onChange: (bet: number) => void
-  onDeal: () => void
+  onSubmit: () => void
+  submitLabel?: string
 }
 
-// Betting menu: click top-view chips to add to the bet, or type an amount.
-export default function BetControls({ bet, chips, busy, onChange, onDeal }: Props) {
+// Betting menu for any game: click top-view chips to add to the bet, or type an amount.
+export default function BetPanel({ bet, chips, busy, onChange, onSubmit, submitLabel = 'Bet' }: Props) {
   return (
     <div className="flex flex-col items-center gap-3">
       <div className="flex flex-wrap justify-center gap-2">
@@ -22,7 +23,7 @@ export default function BetControls({ bet, chips, busy, onChange, onDeal }: Prop
         className="flex items-center gap-2"
         onSubmit={e => {
           e.preventDefault()
-          onDeal()
+          onSubmit()
         }}
       >
         <input
@@ -31,6 +32,7 @@ export default function BetControls({ bet, chips, busy, onChange, onDeal }: Prop
           max={chips}
           value={bet || ''}
           placeholder="Bet"
+          aria-label="Bet amount"
           onChange={e => onChange(Math.min(chips, Math.max(0, Math.floor(Number(e.target.value) || 0))))}
           className="w-28 rounded bg-black/40 px-3 py-2 text-right outline-none ring-1 ring-white/20 focus:ring-yellow-300"
         />
@@ -38,7 +40,7 @@ export default function BetControls({ bet, chips, busy, onChange, onDeal }: Prop
           Clear
         </button>
         <button type="submit" disabled={busy || bet <= 0 || bet > chips} className="rounded bg-yellow-400 px-5 py-2 font-bold text-black hover:bg-yellow-300 disabled:opacity-40">
-          Bet
+          {submitLabel}
         </button>
       </form>
     </div>

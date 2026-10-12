@@ -28,3 +28,11 @@ func (e *BaccaratEngine) IsRoundOver(state any) bool {
 func (e *BaccaratEngine) ResolveRound(state any) (any, []models.ChipChange, error) {
 	panic("not implemented")
 }
+
+func (e *BaccaratEngine) LoadState(data []byte) (any, error) {
+	panic("not implemented")
+}
+
+func (e *BaccaratEngine) PlayerChips(state any, playerID string) int64 {
+	panic("not implemented")
+}

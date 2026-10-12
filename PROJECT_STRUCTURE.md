@@ -22,7 +22,7 @@ Casino/
 │   │   ├── api/
 │   │   │   ├── http.ts                    # Axios/fetch instance, base URL, interceptors
 │   │   │   ├── ws.ts                      # WebSocket client (connect, send, subscribe)
-│   │   │   ├── auth.ts                    # login, register, oauth endpoints
+│   │   │   ├── auth.ts                    # OAuth login URLs, configured providers
 │   │   │   ├── rooms.ts                   # create room, join room, list rooms
 │   │   │   └── user.ts                    # get profile, get chips, update profile
 │   │   │
@@ -38,8 +38,8 @@ Casino/
 │   │   │   └── useAuth.ts                 # Hook for auth state + redirects
 │   │   │
 │   │   ├── pages/
-│   │   │   ├── LoginPage.tsx              # Email/Gmail/Facebook login
-│   │   │   ├── RegisterPage.tsx           # Registration form
+│   │   │   ├── LoginPage.tsx              # Google / Facebook / GitHub login
+│   │   │   ├── AuthCallbackPage.tsx       # Stores the JWT after social login
 │   │   │   ├── LobbyPage.tsx             # Casino interior with clickable game areas
 │   │   │   ├── GameSelectPage.tsx         # After clicking game: offline vs online choice
 │   │   │   ├── RoomPage.tsx               # Waiting room before game starts (online)
@@ -85,14 +85,11 @@ Casino/
 │   │   │   │
 │   │   │   ├── roulette/
 │   │   │   │   ├── RouletteWheel.tsx      # Spinning wheel animation
-│   │   │   │   ├── BettingBoard.tsx       # Number grid + outside bets
-│   │   │   │   ├── BetPlacer.tsx          # Chip placement on board
+│   │   │   │   ├── BettingBoard.tsx       # Inlined board SVG: click spots, chip piles, winning number
 │   │   │   │   └── RouletteControls.tsx   # Spin, clear bets
 │   │   │   │
 │   │   │   └── auth/
-│   │   │       ├── LoginForm.tsx          # Email + password form
-│   │   │       ├── OAuthButtons.tsx       # Google + Facebook login buttons
-│   │   │       └── RegisterForm.tsx       # Registration form
+│   │   │       └── OAuthButtons.tsx       # Google / Facebook / GitHub buttons
 │   │   │
 │   │   ├── types/
 │   │   │   ├── game.ts                    # GameState, Player, Card, etc.
@@ -100,7 +97,7 @@ Casino/
 │   │   │   ├── blackjack.ts              # BlackjackGameState
 │   │   │   ├── baccarat.ts              # BaccaratGameState
 │   │   │   ├── roulette.ts              # RouletteGameState
-│   │   │   ├── user.ts                   # User, AuthToken
+│   │   │   ├── user.ts                   # User
 │   │   │   ├── room.ts                   # Room, RoomSettings
 │   │   │   └── ws.ts                     # WebSocket message types
 │   │   │
@@ -133,7 +130,7 @@ Casino/
 │   │   │   └── chip_transaction.go       # Chip ledger entries
 │   │   │
 │   │   ├── handlers/
-│   │   │   ├── auth.go                   # POST /auth/login, /auth/register, /auth/oauth
+│   │   │   ├── auth.go                   # GET /auth/:provider, /auth/:provider/callback
 │   │   │   ├── user.go                   # GET /users/me, PATCH /users/me
 │   │   │   ├── room.go                   # POST /rooms, GET /rooms/:id, POST /rooms/:id/join
 │   │   │   └── ws.go                     # WebSocket upgrade handler
@@ -200,15 +197,23 @@ Casino/
 -- Users table
 users (
     id              UUID PRIMARY KEY,
-    email           VARCHAR(255) UNIQUE NOT NULL,
-    password_hash   VARCHAR(255),          -- NULL for OAuth users
+    email           VARCHAR(255) UNIQUE,   -- NULL if the provider shares none
     display_name    VARCHAR(50) NOT NULL,
     avatar_url      VARCHAR(500),
-    oauth_provider  VARCHAR(20),           -- 'google', 'facebook', NULL
-    oauth_id        VARCHAR(255),
     chips           BIGINT DEFAULT 1000,   -- Starting chips
-    created_at      TIMESTAMP,
-    updated_at      TIMESTAMP
+    last_daily_bonus_at TIMESTAMPTZ,
+    created_at      TIMESTAMPTZ,
+    updated_at      TIMESTAMPTZ
+)
+
+-- Social logins (Google / Facebook / GitHub) linked to a user
+user_identities (
+    id               UUID PRIMARY KEY,
+    user_id          UUID REFERENCES users,
+    provider         VARCHAR(20) NOT NULL,  -- 'google', 'facebook', 'github'
+    provider_user_id VARCHAR(255) NOT NULL,
+    created_at       TIMESTAMPTZ,
+    UNIQUE (provider, provider_user_id)
 )
 
 -- Rooms table

@@ -6,8 +6,3 @@ export interface User {
   chips: number
   lastDailyBonusAt?: string
 }
-
-export interface AuthToken {
-  token: string
-  user: User
-}

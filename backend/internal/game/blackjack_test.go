@@ -1,6 +1,8 @@
 package game
 
 import (
+	"encoding/json"
+	"strings"
 	"testing"
 
 	"casino/internal/models"
@@ -88,5 +90,49 @@ func TestResolveDealerBlackjackBeats21(t *testing.T) {
 	_, changes, _ := NewBlackjackEngine().ResolveRound(s)
 	if changes[0].Amount != -10 {
 		t.Fatalf("amount = %d, want -10", changes[0].Amount)
+	}
+}
+
+func TestPlayerViewHidesDeckAndHoleCard(t *testing.T) {
+	e := NewBlackjackEngine()
+	raw, _ := e.StartGame([]models.Player{{ID: "p1", Chips: 100}}, nil)
+	s := raw.(*BlackjackState)
+	s.Deck = cards("9", "5", "7", "K", "2") // player 9,7 = 16; dealer 5, hole K
+	raw, err := e.HandleAction(s, "p1", models.Action{Type: "bet", Amount: 10})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	data, _ := json.Marshal(e.GetStateForPlayer(raw, "p1"))
+	if strings.Contains(string(data), `"deck"`) {
+		t.Fatalf("player view contains the deck: %s", data)
+	}
+	view := e.GetStateForPlayer(raw, "p1").(*models.BlackjackGameState)
+	if hole := view.DealerHand.Cards[1]; !hole.Hidden || hole.Rank != "" {
+		t.Fatalf("hole card not masked: %+v", hole)
+	}
+	if view.DealerHand.Value != 5 || view.Players[0].Hands[0].Value != 16 {
+		t.Fatalf("values = dealer %d, player %d; want 5, 16", view.DealerHand.Value, view.Players[0].Hands[0].Value)
+	}
+}
+
+func TestStateSurvivesSaveAndLoad(t *testing.T) {
+	e := NewBlackjackEngine()
+	raw, _ := e.StartGame([]models.Player{{ID: "p1", Chips: 100}}, nil)
+	// Fixed deck so neither side gets a natural and the round stays open.
+	raw.(*BlackjackState).Deck = cards("9", "5", "7", "K", "2", "3")
+	raw, _ = e.HandleAction(raw, "p1", models.Action{Type: "bet", Amount: 10})
+
+	data, _ := json.Marshal(raw)
+	loaded, err := e.LoadState(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	before, after := raw.(*BlackjackState), loaded.(*BlackjackState)
+	if len(after.Deck) != len(before.Deck) || after.Phase != before.Phase || e.PlayerChips(loaded, "p1") != 90 {
+		t.Fatalf("state changed after reload: phase %q deck %d chips %d", after.Phase, len(after.Deck), e.PlayerChips(loaded, "p1"))
+	}
+	if !after.DealerHand.Cards[1].Hidden {
+		t.Fatal("hole card revealed after reload")
 	}
 }

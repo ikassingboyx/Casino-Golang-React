@@ -19,14 +19,14 @@ export function useWebSocket(roomId: string | null) {
     ws.current.onmessage = (event) => {
       const msg: WSMessage = JSON.parse(event.data)
       if (msg.type === 'game_state' || msg.type === 'game_started') {
-        setGameState(msg.data as any)
+        setGameState(msg.data as Parameters<typeof setGameState>[0])
       }
     }
 
     return () => {
       ws.current?.close()
     }
-  }, [roomId])
+  }, [roomId, setConnected, setGameState])
 
   const send = useCallback((type: string, data?: unknown) => {
     if (ws.current?.readyState === WebSocket.OPEN) {

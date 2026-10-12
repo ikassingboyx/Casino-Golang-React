@@ -1,6 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import LoginPage from './pages/LoginPage'
-import RegisterPage from './pages/RegisterPage'
 import AuthCallbackPage from './pages/AuthCallbackPage'
 import LobbyPage from './pages/LobbyPage'
 import RoomPage from './pages/RoomPage'
@@ -9,8 +8,6 @@ import PokerPage from './pages/PokerPage'
 import BaccaratPage from './pages/BaccaratPage'
 import RoulettePage from './pages/RoulettePage'
 import ProfilePage from './pages/ProfilePage'
-import TestHomePage from './pages/TestHomePage'
-import BlackjackTestPage from './pages/BlackjackTestPage'
 import { useAuthStore } from './store/authStore'
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
@@ -22,12 +19,9 @@ export default function App() {
   return (
     <BrowserRouter>
       <Routes>
-        {/* Temporary test pages */}
-        <Route path="/" element={<PrivateRoute><TestHomePage /></PrivateRoute>} />
-        <Route path="/test/blackjack" element={<PrivateRoute><BlackjackTestPage /></PrivateRoute>} />
+        <Route path="/" element={<Navigate to="/lobby" replace />} />
 
         <Route path="/login" element={<LoginPage />} />
-        <Route path="/register" element={<RegisterPage />} />
         <Route path="/auth/callback" element={<AuthCallbackPage />} />
 
         <Route path="/lobby" element={<PrivateRoute><LobbyPage /></PrivateRoute>} />
@@ -41,6 +35,9 @@ export default function App() {
         <Route path="/game/roulette/offline" element={<PrivateRoute><RoulettePage offline /></PrivateRoute>} />
         <Route path="/game/roulette/:roomId" element={<PrivateRoute><RoulettePage /></PrivateRoute>} />
         <Route path="/profile" element={<PrivateRoute><ProfilePage /></PrivateRoute>} />
+
+        {/* Unknown URLs go to the lobby (or login, via PrivateRoute). */}
+        <Route path="*" element={<Navigate to="/lobby" replace />} />
       </Routes>
     </BrowserRouter>
   )

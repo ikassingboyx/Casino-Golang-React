@@ -20,8 +20,6 @@ func RegisterRoutes(r *gin.Engine, db *sql.DB, hub *ws.Hub, cfg *config.Config) 
 	api := r.Group("/api")
 
 	// Auth (public)
-	api.POST("/auth/register", authH.Register)
-	api.POST("/auth/login", authH.Login)
 	api.GET("/auth/providers", authH.Providers)
 	api.GET("/auth/:provider", authH.OAuthRedirect)
 	api.GET("/auth/:provider/callback", authH.OAuthCallback)

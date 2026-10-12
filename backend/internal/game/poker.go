@@ -28,3 +28,11 @@ func (e *PokerEngine) IsRoundOver(state any) bool {
 func (e *PokerEngine) ResolveRound(state any) (any, []models.ChipChange, error) {
 	panic("not implemented")
 }
+
+func (e *PokerEngine) LoadState(data []byte) (any, error) {
+	panic("not implemented")
+}
+
+func (e *PokerEngine) PlayerChips(state any, playerID string) int64 {
+	panic("not implemented")
+}

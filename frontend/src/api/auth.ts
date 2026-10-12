@@ -1,11 +1,4 @@
 import http, { API_URL } from './http'
-import type { AuthToken } from '../types/user'
-
-export const register = (email: string, password: string, displayName: string) =>
-  http.post<AuthToken>('/auth/register', { email, password, displayName })
-
-export const login = (email: string, password: string) =>
-  http.post<AuthToken>('/auth/login', { email, password })
 
 export type OAuthProvider = 'google' | 'facebook' | 'github'
 

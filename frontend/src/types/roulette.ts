@@ -1,13 +1,12 @@
 import type { BaseGameState, BasePlayer } from './game'
 
-export type BetType =
-  | 'straight' | 'split' | 'street' | 'corner' | 'six_line'
-  | 'column' | 'dozen' | 'red' | 'black' | 'odd' | 'even' | 'low' | 'high'
-
+// A stake on one board spot. `type` is the spot name from the board SVG
+// (data-bet), e.g. "straight-17", "split-1-2", "red", "dozen-2".
 export interface RouletteBet {
-  type: BetType
+  type: string
   numbers: number[]
   amount: number
+  win?: number // chips returned (stake + winnings) once resolved
 }
 
 export interface RoulettePlayer extends BasePlayer {

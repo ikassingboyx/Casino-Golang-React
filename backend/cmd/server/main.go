@@ -13,6 +13,9 @@ import (
 
 func main() {
 	cfg := config.Load()
+	if err := cfg.Validate(); err != nil {
+		log.Fatalf("invalid config: %v", err)
+	}
 
 	database, err := db.Connect(cfg.DatabaseURL)
 	if err != nil {
@@ -31,9 +34,6 @@ func main() {
 	r.Use(middleware.CORS(cfg.FrontendURL))
 
 	handlers.RegisterRoutes(r, database, hub, cfg)
-
-	// Temporary in-memory game API used by the /test pages.
-	handlers.RegisterDevRoutes(r)
 
 	log.Printf("server starting on :%s", cfg.Port)
 	if err := r.Run(":" + cfg.Port); err != nil {

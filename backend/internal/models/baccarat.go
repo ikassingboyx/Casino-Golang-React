@@ -18,9 +18,9 @@ type BaccaratPlayer struct {
 
 type BaccaratGameState struct {
 	BaseGameState
-	PlayerHand BaccaratHand   `json:"playerHand"`
-	BankerHand BaccaratHand   `json:"bankerHand"`
+	PlayerHand BaccaratHand     `json:"playerHand"`
+	BankerHand BaccaratHand     `json:"bankerHand"`
 	Players    []BaccaratPlayer `json:"players"`
-	Result     string         `json:"result,omitempty"` // player, banker, tie
-	ChipChange int64          `json:"chipChange,omitempty"`
+	Result     string           `json:"result,omitempty"` // player, banker, tie
+	ChipChange int64            `json:"chipChange,omitempty"`
 }
