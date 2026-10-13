@@ -1,83 +1,80 @@
-import { useEffect, useRef, useState } from 'react'
-import { motion } from 'framer-motion'
-import { spinTargets } from '../../utils/roulette'
+import { useEffect, useLayoutEffect, useRef } from 'react'
+import { useReducedMotion } from 'framer-motion'
+import { planSpin, POCKET_R } from '../../utils/roulettePhysics'
 
 interface Props {
   // Changing `id` starts a new spin that lands on `winning`.
   spin: { winning: number; id: number } | null
+  // Called when the ball has come to rest (the wheel keeps slowing down).
   onSpinEnd: () => void
 }
 
-// Asset geometry (600x600 canvas, see assets/roulette): the ball orbits on
-// the track at r≈243 and rests in a pocket at r≈168; it is 16px wide.
-const CANVAS = 600
-const TRACK_R = 243
-const POCKET_R = 168
+const CANVAS = 600 // wheel artwork size; ball artwork is 16px at this scale
 const BALL = 16
-const SPIN_SECONDS = 7
 
-// Ball position as a % offset from the top of the wheel for a given radius.
-const topFor = (r: number) => `${((CANVAS / 2 - r - BALL / 2) / CANVAS) * 100}%`
-
+// Layered wheel (static rim + rotating wheel) with a ball driven frame by
+// frame from a physics-like plan. Only transforms are animated.
 export default function RouletteWheel({ spin, onSpinEnd }: Props) {
-  const [wheelDeg, setWheelDeg] = useState(0)
-  const [ballDeg, setBallDeg] = useState(0)
-  const [spinning, setSpinning] = useState(false)
-  const angles = useRef({ wheel: 0, ball: 0 })
+  const reduceMotion = useReducedMotion() ?? false
+  const box = useRef<HTMLDivElement>(null)
+  const wheelEl = useRef<HTMLImageElement>(null)
+  const ballLayer = useRef<HTMLDivElement>(null)
+  const ballEl = useRef<HTMLImageElement>(null)
+  const pose = useRef({ wheel: 0, ball: 0, radius: POCKET_R, tilt: 0.9 })
+  const onEnd = useRef(onSpinEnd)
+  useLayoutEffect(() => {
+    onEnd.current = onSpinEnd
+  })
+
+  const draw = () => {
+    const size = box.current?.offsetWidth ?? CANVAS
+    const scale = size / CANVAS
+    const { wheel, ball, radius, tilt } = pose.current
+    if (wheelEl.current) wheelEl.current.style.transform = `rotate(${wheel}deg)`
+    if (ballLayer.current) ballLayer.current.style.transform = `rotate(${ball}deg)`
+    if (ballEl.current) {
+      ballEl.current.style.width = `${BALL * scale}px`
+      // Counter-rotate so the highlight stays where the light is.
+      ballEl.current.style.transform = `translate(-50%, -50%) translateY(${-radius * scale}px) rotate(${-ball}deg) scale(${tilt})`
+    }
+  }
+
+  // Initial pose, and keep it right when the wheel is resized.
+  useLayoutEffect(() => {
+    draw()
+    const ro = new ResizeObserver(draw)
+    if (box.current) ro.observe(box.current)
+    return () => ro.disconnect()
+  }, [])
 
   useEffect(() => {
     if (!spin) return
-    const t = spinTargets(spin.winning, angles.current.wheel, angles.current.ball)
-    angles.current = { wheel: t.wheelDeg, ball: t.ballDeg }
-    setWheelDeg(t.wheelDeg)
-    setBallDeg(t.ballDeg)
-    setSpinning(true)
-  }, [spin])
-
-  const ease = [0.12, 0.6, 0.22, 1] as const // fast start, long slow-down
+    const plan = planSpin(spin.winning, pose.current.wheel, pose.current.ball, reduceMotion)
+    const start = performance.now()
+    let ended = false
+    let frame = 0
+    const tick = (now: number) => {
+      const t = (now - start) / 1000
+      pose.current = { wheel: plan.wheel(t), ball: plan.ball(t), radius: plan.radius(t), tilt: plan.tilt(t) }
+      draw()
+      if (!ended && t >= plan.settleAt) {
+        ended = true
+        onEnd.current()
+      }
+      if (t < plan.duration) frame = requestAnimationFrame(tick)
+    }
+    frame = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(frame)
+  }, [spin, reduceMotion])
 
   return (
-    <div className="relative aspect-square w-full select-none" role="img" aria-label="Roulette wheel">
-      <motion.img
-        src="/assets/roulette/roulette-inner.svg"
-        alt=""
-        draggable={false}
-        className="absolute inset-0 h-full w-full"
-        initial={false}
-        animate={{ rotate: wheelDeg }}
-        transition={{ duration: SPIN_SECONDS, ease }}
-        onAnimationComplete={() => {
-          if (!spinning) return
-          setSpinning(false)
-          onSpinEnd()
-        }}
-      />
+    <div ref={box} className="relative aspect-square w-full select-none" role="img" aria-label="Roulette wheel">
+      <img ref={wheelEl} src="/assets/roulette/roulette-inner.svg" alt="" draggable={false} className="absolute inset-0 h-full w-full will-change-transform" />
       <img src="/assets/roulette/roulette-outer.svg" alt="" draggable={false} className="absolute inset-0 h-full w-full" />
-
-      {/* The ball rides a full-size layer that rotates; its distance from the
-          top of that layer is its distance from the wheel's center. */}
-      <motion.div
-        className="pointer-events-none absolute inset-0"
-        initial={false}
-        animate={{ rotate: ballDeg }}
-        transition={{ duration: SPIN_SECONDS, ease }}
-      >
-        <motion.img
-          src="/assets/roulette/roulette-ball.svg"
-          alt=""
-          draggable={false}
-          className="absolute"
-          style={{ left: `${((CANVAS / 2 - BALL / 2) / CANVAS) * 100}%`, width: `${(BALL / CANVAS) * 100}%` }}
-          initial={false}
-          animate={{
-            top: spinning
-              // out to the track, orbit, then drop and bounce into the pocket
-              ? [topFor(POCKET_R), topFor(TRACK_R), topFor(TRACK_R), topFor(205), topFor(184), topFor(174), topFor(POCKET_R)]
-              : topFor(POCKET_R),
-          }}
-          transition={spinning ? { duration: SPIN_SECONDS, times: [0, 0.05, 0.58, 0.72, 0.82, 0.91, 1] } : { duration: 0 }}
-        />
-      </motion.div>
+      {/* Full-size layer rotated to the ball's angle; the ball sits above its centre. */}
+      <div ref={ballLayer} className="pointer-events-none absolute inset-0 will-change-transform">
+        <img ref={ballEl} src="/assets/roulette/roulette-ball.svg" alt="" draggable={false} className="absolute left-1/2 top-1/2" />
+      </div>
     </div>
   )
 }

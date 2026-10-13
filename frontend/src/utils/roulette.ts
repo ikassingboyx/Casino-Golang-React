@@ -10,17 +10,3 @@ export function numberColor(n: number): NumberColor {
   if (n === 0) return 'green'
   return RED.has(n) ? 'red' : 'black'
 }
-
-const mod = (a: number, n: number) => ((a % n) + n) % n
-
-// Final angles for a spin that lands on `winning`. The wheel turns clockwise
-// (4+ turns), the ball counter-clockwise (6+ turns) and both end with the
-// ball over the winning pocket. Angles are degrees clockwise from 12 o'clock.
-// Based on spinTargets in the asset README, but the ball starts from its
-// previous angle so every spin travels the full distance.
-export function spinTargets(winning: number, prevWheelDeg: number, prevBallDeg: number) {
-  const wheelDeg = prevWheelDeg + 360 * 4 + Math.random() * 360
-  const pocketDeg = mod(WHEEL_ORDER.indexOf(winning) * POCKET_STEP + wheelDeg, 360)
-  const ballDeg = prevBallDeg - 360 * 6 - mod(prevBallDeg - pocketDeg, 360)
-  return { wheelDeg, ballDeg }
-}
