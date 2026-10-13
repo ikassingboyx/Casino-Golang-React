@@ -3,7 +3,7 @@ import GameShell from '../components/common/GameShell'
 import DealProvider from '../components/common/DealProvider'
 import { useDealing } from '../components/common/dealing'
 import ChipSelector from '../components/common/ChipSelector'
-import GameDock, { DockStat } from '../components/common/GameDock'
+import GameDock, { DockChips, DockStat } from '../components/common/GameDock'
 import BlackjackTable from '../components/blackjack/BlackjackTable'
 import { syncChips, useOfflineGame } from '../hooks/useOfflineGame'
 import { useAuthStore } from '../store/authStore'
@@ -20,7 +20,7 @@ function resultMessage(amount: number) {
 export default function BlackjackPage({ offline = false }: Props) {
   if (!offline) {
     return (
-      <GameShell title="Blackjack">
+      <GameShell background="/assets/images/bg-blackjack.svg">
         <p className="text-ivory/60">Online blackjack is coming soon.</p>
       </GameShell>
     )
@@ -80,7 +80,12 @@ function OfflineBlackjack() {
   const locked = busy || dealing
   const dock = !game ? null : showHand ? (
     <GameDock
-      info={<DockStat label="Bet" value={hand?.bet ?? 0} accent />}
+      info={
+        <>
+          <DockChips amount={chips} />
+          <DockStat label="Bet" value={hand?.bet ?? 0} accent />
+        </>
+      }
       actions={
         <>
           <button onClick={() => play('hit')} disabled={locked} className="dock-primary">Hit</button>
@@ -95,8 +100,8 @@ function OfflineBlackjack() {
     <GameDock
       info={
         <>
+          <DockChips amount={chips - bet} />
           <DockStat label="Bet" value={bet} accent />
-          <DockStat label="Balance" value={chips - bet} />
         </>
       }
       chips={<ChipSelector onSelect={v => setBet(b => b + v)} max={chips - bet} disabled={locked} />}
@@ -112,7 +117,7 @@ function OfflineBlackjack() {
   if (!message && state && !hand) message = chips > 0 ? 'Place your bet' : "You're out of chips."
 
   return (
-    <GameShell title="Blackjack" dock={dock}>
+    <GameShell background="/assets/images/bg-blackjack.svg" dock={dock}>
       <BlackjackTable
         state={state}
         roundId={game?.gameId}

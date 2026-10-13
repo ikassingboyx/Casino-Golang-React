@@ -84,3 +84,66 @@ body {
     opacity: 0.35;
   }
 }
+
+/* Lobby: a game's station lights up when hovered or focused. */
+@layer components {
+  .game-spot {
+    cursor: pointer;
+    outline: none;
+  }
+  .game-spot[aria-disabled='true'] {
+    cursor: default;
+  }
+  .game-spot .spot-light,
+  .game-spot .spot-cta {
+    opacity: 0;
+    transition: opacity 250ms ease;
+  }
+  .game-spot .spot-art {
+    transform-box: fill-box;
+    transform-origin: 50% 100%;
+    transition: transform 250ms ease, filter 250ms ease;
+  }
+  .game-spot .spot-bulb {
+    opacity: 0.55;
+  }
+  .game-spot .spot-name-glow {
+    opacity: 0.4;
+    transition: opacity 250ms ease;
+  }
+  .game-spot:not([aria-disabled='true']):is(:hover, :focus-visible) .spot-light,
+  .game-spot:not([aria-disabled='true']):is(:hover, :focus-visible) .spot-cta,
+  .game-spot:not([aria-disabled='true']):is(:hover, :focus-visible) .spot-name-glow {
+    opacity: 1;
+  }
+  .game-spot:not([aria-disabled='true']):is(:hover, :focus-visible) .spot-art {
+    transform: translateY(-6px) scale(1.02);
+    filter: brightness(1.12) drop-shadow(0 0 14px rgba(255, 200, 110, 0.7));
+  }
+  .game-spot:not([aria-disabled='true']):is(:hover, :focus-visible) .spot-bulb {
+    animation: spot-bulb 0.9s steps(2, jump-none) infinite;
+  }
+  .game-spot:not([aria-disabled='true']):is(:hover, :focus-visible) .spot-bulb:nth-child(odd) {
+    animation-delay: 0.45s;
+  }
+}
+
+@keyframes spot-bulb {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0.35;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .game-spot .spot-art,
+  .game-spot .spot-bulb {
+    transition: none;
+    animation: none !important;
+  }
+  .game-spot:is(:hover, :focus-visible) .spot-art {
+    transform: none;
+  }
+}

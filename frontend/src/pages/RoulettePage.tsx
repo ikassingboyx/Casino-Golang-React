@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from 'react'
 import GameShell from '../components/common/GameShell'
 import ChipSelector from '../components/common/ChipSelector'
-import GameDock, { DockStat } from '../components/common/GameDock'
+import GameDock, { DockChips, DockStat } from '../components/common/GameDock'
 import PlayerSeat from '../components/common/PlayerSeat'
 import { SEAT_COUNT, arrangeSeats } from '../components/common/seats'
 import { TableSizeContext } from '../components/common/tableSize'
@@ -19,7 +19,7 @@ interface Props { offline?: boolean }
 export default function RoulettePage({ offline = false }: Props) {
   if (!offline) {
     return (
-      <GameShell title="Roulette">
+      <GameShell background="/assets/images/bg-roulette.svg">
         <p className="text-ivory/60">Online roulette is coming soon.</p>
       </GameShell>
     )
@@ -131,8 +131,9 @@ function OfflineRoulette() {
   // leaving room under the board for the players' row.
   const pad = 24
   const seatsH = 64
-  const w = box.width - pad * 2
-  const h = box.height - pad * 2
+  const rail = 24 // the rail around the felt
+  const w = Math.min(box.width - pad * 2 - rail - 96, 1280) // 48px each side for the close button
+  const h = box.height - pad * 2 - rail
   const stacked = w < 760
   const wheel = Math.max(0, stacked ? Math.min(w * 0.6, h * 0.36) : Math.min(h, w * 0.34, 520))
   const boardW = Math.max(0, stacked ? Math.min(w, (h - wheel - seatsH - 48) * BOARD_ASPECT) : Math.min(w - wheel - pad, (h - seatsH - 48) * BOARD_ASPECT))
@@ -146,8 +147,8 @@ function OfflineRoulette() {
     <GameDock
       info={
         <>
+          <DockChips amount={Math.max(available, 0)} />
           <DockStat label="Bet" value={totalBet} accent />
-          <DockStat label="Balance" value={Math.max(available, 0)} />
         </>
       }
       chips={<ChipSelector selected={chip} onSelect={setChip} max={available} disabled={locked} />}
@@ -163,9 +164,11 @@ function OfflineRoulette() {
   )
 
   return (
-    <GameShell title="Roulette" dock={dock}>
-      <div ref={area} className="table-rail h-full w-full max-w-[1500px] rounded-[2.5rem] p-3">
-        <div className="table-felt flex h-full w-full items-center justify-center rounded-[2rem]" style={{ padding: pad - 12 }}>
+    <GameShell background="/assets/images/bg-roulette.svg" dock={dock}>
+      {/* Measures the space; the table itself is only as big as what's on it, so the room shows around it. */}
+      <div ref={area} className="flex h-full w-full items-center justify-center">
+        <div className="table-rail rounded-[2.5rem] p-3">
+          <div className="table-felt flex items-center justify-center rounded-[2rem]" style={{ padding: pad - 12 }}>
           {box.width > 0 && (
             <div className={`flex items-center justify-center ${stacked ? 'flex-col' : 'flex-row'}`} style={{ gap: pad }}>
               <div className="flex flex-col items-center gap-2" style={{ width: wheel }}>
@@ -203,6 +206,7 @@ function OfflineRoulette() {
               </div>
             </div>
           )}
+          </div>
         </div>
       </div>
     </GameShell>

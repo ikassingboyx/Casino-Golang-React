@@ -4,7 +4,7 @@ import DealProvider from '../components/common/DealProvider'
 import ChipSelector from '../components/common/ChipSelector'
 import { useDealing } from '../components/common/dealing'
 import BaccaratTable from '../components/baccarat/BaccaratTable'
-import GameDock, { DockStat } from '../components/common/GameDock'
+import GameDock, { DockChips, DockStat } from '../components/common/GameDock'
 import type { SettleStage } from '../components/baccarat/BetAreas'
 import { syncChips, useOfflineGame } from '../hooks/useOfflineGame'
 import { useAuthStore } from '../store/authStore'
@@ -17,7 +17,7 @@ interface Props { offline?: boolean }
 export default function BaccaratPage({ offline = false }: Props) {
   if (!offline) {
     return (
-      <GameShell title="Baccarat">
+      <GameShell background="/assets/images/bg-baccarat.svg">
         <p className="text-ivory/60">Online baccarat is coming soon.</p>
       </GameShell>
     )
@@ -187,8 +187,8 @@ function OfflineBaccarat() {
     <GameDock
       info={
         <>
+          <DockChips amount={stack ?? 0} />
           <DockStat label="Bet" value={totalBet} accent />
-          <DockStat label="Balance" value={stack ?? 0} />
         </>
       }
       chips={<ChipSelector selected={chip} onSelect={setChip} max={available} disabled={locked} />}
@@ -204,7 +204,7 @@ function OfflineBaccarat() {
   )
 
   return (
-    <GameShell title="Baccarat" dock={dock}>
+    <GameShell background="/assets/images/bg-baccarat.svg" dock={dock}>
       <BaccaratTable
         playerCards={playerHand?.cards.slice(0, shown.player) ?? []}
         bankerCards={bankerHand?.cards.slice(0, shown.banker) ?? []}
