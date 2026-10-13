@@ -13,7 +13,8 @@ type BaccaratBets struct {
 
 type BaccaratPlayer struct {
 	Player
-	Bets BaccaratBets `json:"bets"`
+	Bets    BaccaratBets `json:"bets"`
+	Payouts BaccaratBets `json:"payouts"` // chips returned per spot (stake + winnings) once resolved
 }
 
 type BaccaratGameState struct {

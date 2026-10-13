@@ -35,6 +35,8 @@ func NewEngine(gameType string) (GameEngine, bool) {
 		return NewBlackjackEngine(), true
 	case "roulette":
 		return NewRouletteEngine(), true
+	case "baccarat":
+		return NewBaccaratEngine(), true
 	}
 	return nil, false
 }

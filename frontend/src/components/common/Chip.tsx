@@ -22,7 +22,7 @@ export default function Chip({ value, onClick, disabled, selected, size = 56 }: 
       aria-pressed={selected}
       style={{ width: size, height: size }}
       className={`rounded-full transition-transform hover:-translate-y-1 active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:translate-y-0 ${
-        selected ? '-translate-y-2 ring-4 ring-yellow-300 ring-offset-2 ring-offset-black/40' : ''
+        selected ? '-translate-y-2 ring-[3px] ring-brass-light ring-offset-2 ring-offset-[#120b07]' : ''
       }`}
     >
       {missing ? (

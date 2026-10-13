@@ -38,5 +38,5 @@ type ChipChange struct {
 type Action struct {
 	Type   string        `json:"action"`
 	Amount int64         `json:"amount,omitempty"`
-	Bets   []RouletteBet `json:"bets,omitempty"` // roulette: all bets for a spin
+	Bets   []RouletteBet `json:"bets,omitempty"` // roulette: all bets for a spin; baccarat: stakes on "player", "banker", "tie"
 }

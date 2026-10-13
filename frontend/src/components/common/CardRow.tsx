@@ -15,15 +15,17 @@ interface Props {
   // Identifies the round. Cards of a new round must get new keys, otherwise
   // a card still flying to the discard tray would be reused instead of dealt.
   roundKey?: string
+  // Fraction of each card hidden under the next one, for tight spots like seats.
+  overlap?: number
 }
 
 // A labelled row of cards: dealer/player hands, community cards, etc.
-export default function CardRow({ cards, label, value, note, cardWidth = 96, labelPosition = 'top', dealOrder = i => i, roundKey = '' }: Props) {
+export default function CardRow({ cards, label, value, note, cardWidth = 96, labelPosition = 'top', dealOrder = i => i, roundKey = '', overlap = 0 }: Props) {
   const dealing = useDealing()
   // Totals and notes wait until the cards they describe have landed.
   const settled = !dealing
   const caption = label && (
-    <div className="text-sm uppercase tracking-widest text-white/70">
+    <div className="font-felt text-sm tracking-[0.2em] text-ivory/75">
       {label}
       {settled && cards.length > 0 && value !== undefined && ` · ${value}`}
       {settled && note && <span className="ml-2 text-yellow-300">{note}</span>}
@@ -33,9 +35,11 @@ export default function CardRow({ cards, label, value, note, cardWidth = 96, lab
   return (
     <div className="flex flex-col items-center gap-2">
       {labelPosition === 'top' && caption}
-      <div className="flex flex-wrap justify-center gap-2" style={{ minHeight: (cardWidth * 336) / 240 }}>
+      <div className={`flex justify-center ${overlap ? '' : 'flex-wrap gap-2'}`} style={{ minHeight: (cardWidth * 336) / 240 }}>
         <AnimatePresence>
-          {cards.map((c, i) => <Card key={`${roundKey}:${i}`} card={c} width={cardWidth} dealOrder={dealOrder(i)} />)}
+          {cards.map((c, i) => (
+            <Card key={`${roundKey}:${i}`} card={c} width={cardWidth} dealOrder={dealOrder(i)} marginLeft={overlap && i > 0 ? -cardWidth * overlap : 0} />
+          ))}
         </AnimatePresence>
       </div>
       {labelPosition === 'bottom' && caption}

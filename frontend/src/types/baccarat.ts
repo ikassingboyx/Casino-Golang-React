@@ -13,13 +13,17 @@ export interface BaccaratBets {
 
 export interface BaccaratPlayer extends BasePlayer {
   bets: BaccaratBets
+  payouts: BaccaratBets // chips returned per spot (stake + winnings) once resolved
 }
+
+export type BaccaratSpot = keyof BaccaratBets
+export type BaccaratResult = 'player' | 'banker' | 'tie'
 
 export interface BaccaratGameState extends BaseGameState {
   gameType: 'baccarat'
   playerHand: BaccaratHand
   bankerHand: BaccaratHand
   players: BaccaratPlayer[]
-  result?: 'player' | 'banker' | 'tie'
+  result?: BaccaratResult
   chipChange?: number
 }

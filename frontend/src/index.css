@@ -8,13 +8,79 @@
   padding: 0;
 }
 
+html,
+body,
+#root {
+  height: 100%;
+}
+
 body {
-  background: #0a0a0a;
-  color: #fff;
-  font-family: system-ui, sans-serif;
+  background: #160d09;
+  color: #f1e8d2;
+  font-family: Manrope, system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
 }
 
-#root {
-  min-height: 100svh;
+@layer components {
+  /* The table: leather rail around baize, D-shaped (flat dealer edge, curved player side). */
+  .table-d {
+    border-radius: 3% 3% 50% 50% / 6% 6% 100% 100%;
+  }
+  /* Narrow screens: straight sides, only the bottom rounded. */
+  .table-d-tall {
+    border-radius: 5% 5% 50% 50% / 3% 3% 38% 38%;
+  }
+  .table-rail {
+    background: radial-gradient(120% 90% at 50% 0%, #5a2219 0%, #3b1712 55%, #250d09 100%);
+    box-shadow:
+      0 30px 60px rgba(0, 0, 0, 0.6),
+      inset 0 2px 0 rgba(255, 220, 180, 0.12),
+      inset 0 -6px 14px rgba(0, 0, 0, 0.5);
+  }
+  .table-felt {
+    background:
+      radial-gradient(70% 60% at 50% 35%, rgba(255, 255, 255, 0.07), transparent 70%),
+      radial-gradient(130% 100% at 50% 30%, #1f6a53 0%, #14503f 45%, #0b3529 100%);
+    box-shadow:
+      inset 0 0 0 2px rgba(201, 162, 74, 0.55),
+      inset 0 0 50px rgba(0, 0, 0, 0.45);
+  }
+  .dock-btn {
+    border-radius: 9999px;
+    padding: 0.5rem 1rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: rgba(241, 232, 210, 0.9);
+    box-shadow: inset 0 0 0 1px rgba(241, 232, 210, 0.25);
+    transition: background-color 150ms, opacity 150ms;
+  }
+  .dock-btn:hover:not(:disabled) {
+    background: rgba(241, 232, 210, 0.1);
+  }
+  .dock-primary {
+    border-radius: 9999px;
+    padding: 0.625rem 1.75rem;
+    font-size: 0.875rem;
+    font-weight: 800;
+    color: #2a1a05;
+    background: linear-gradient(to bottom, #e6c878, #c9a24a);
+    box-shadow: 0 2px 0 #8a6a24, 0 6px 16px rgba(0, 0, 0, 0.4);
+    transition: filter 150ms, opacity 150ms;
+  }
+  .dock-primary:hover:not(:disabled) {
+    filter: brightness(1.1);
+  }
+  .dock-primary:active:not(:disabled) {
+    transform: translateY(1px);
+  }
+  .dock-btn:focus-visible,
+  .dock-primary:focus-visible {
+    outline: 2px solid #e6c878;
+    outline-offset: 2px;
+  }
+  .dock-btn:disabled,
+  .dock-primary:disabled {
+    cursor: default;
+    opacity: 0.35;
+  }
 }

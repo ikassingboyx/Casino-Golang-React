@@ -2,10 +2,11 @@ import { useEffect, useState } from 'react'
 import GameShell from '../components/common/GameShell'
 import DealProvider from '../components/common/DealProvider'
 import { useDealing } from '../components/common/dealing'
-import BetPanel from '../components/common/BetPanel'
+import ChipSelector from '../components/common/ChipSelector'
+import GameDock, { DockStat } from '../components/common/GameDock'
 import BlackjackTable from '../components/blackjack/BlackjackTable'
-import BlackjackControls from '../components/blackjack/BlackjackControls'
 import { syncChips, useOfflineGame } from '../hooks/useOfflineGame'
+import { useAuthStore } from '../store/authStore'
 import type { BlackjackGameState } from '../types/blackjack'
 
 interface Props { offline?: boolean }
@@ -19,8 +20,8 @@ function resultMessage(amount: number) {
 export default function BlackjackPage({ offline = false }: Props) {
   if (!offline) {
     return (
-      <GameShell>
-        <p className="mt-20 text-neutral-400">Online blackjack is coming soon.</p>
+      <GameShell title="Blackjack">
+        <p className="text-ivory/60">Online blackjack is coming soon.</p>
       </GameShell>
     )
   }
@@ -35,6 +36,7 @@ function OfflineBlackjack() {
   // The header balance is updated by hand, once the cards have landed.
   const { game, busy, error, start, act } = useOfflineGame<BlackjackGameState>('blackjack', { autoSyncChips: false })
   const dealing = useDealing() // results, chips and buttons wait for the cards to land
+  const user = useAuthStore(s => s.user)
   const [bet, setBet] = useState(0)
 
   const state = game?.state ?? null
@@ -74,31 +76,52 @@ function OfflineBlackjack() {
 
   let message = error ?? ''
   if (!message && game?.result && !dealing) message = resultMessage(game.result.amount)
-  if (!message && state && !hand) message = 'Place your bet'
+
+  const locked = busy || dealing
+  const dock = !game ? null : showHand ? (
+    <GameDock
+      info={<DockStat label="Bet" value={hand?.bet ?? 0} accent />}
+      actions={
+        <>
+          <button onClick={() => play('hit')} disabled={locked} className="dock-primary">Hit</button>
+          <button onClick={() => play('stand')} disabled={locked} className="dock-primary">Stand</button>
+          <button onClick={() => play('double')} disabled={locked || !hand || hand.cards.length !== 2 || chips < hand.bet} className="dock-btn">
+            Double
+          </button>
+        </>
+      }
+    />
+  ) : (
+    <GameDock
+      info={
+        <>
+          <DockStat label="Bet" value={bet} accent />
+          <DockStat label="Balance" value={chips - bet} />
+        </>
+      }
+      chips={<ChipSelector onSelect={v => setBet(b => b + v)} max={chips - bet} disabled={locked} />}
+      actions={
+        <>
+          <button onClick={() => setBet(0)} disabled={locked || bet === 0} className="dock-btn">Clear</button>
+          <button onClick={deal} disabled={locked || bet <= 0 || bet > chips} className="dock-primary">Deal</button>
+        </>
+      }
+    />
+  )
+
+  if (!message && state && !hand) message = chips > 0 ? 'Place your bet' : "You're out of chips."
 
   return (
-    <GameShell>
+    <GameShell title="Blackjack" dock={dock}>
       <BlackjackTable
         state={state}
         roundId={game?.gameId}
-        betAmount={showHand ? (hand?.bet ?? 0) : bet}
-        stackAmount={showHand ? chips : chips - bet}
+        myId={user?.id}
+        myAvatar={user?.avatarUrl}
+        myBet={showHand ? (hand?.bet ?? 0) : bet}
+        myChips={showHand ? chips : chips - bet}
+        myResult={game?.result && !dealing && state?.phase === 'resolved' ? game.result.amount : undefined}
         message={message}
-        controls={
-          !game ? null : showHand ? (
-            <BlackjackControls
-              busy={busy || dealing}
-              canDouble={!!hand && hand.cards.length === 2 && chips >= hand.bet}
-              onHit={() => play('hit')}
-              onStand={() => play('stand')}
-              onDouble={() => play('double')}
-            />
-          ) : chips > 0 ? (
-            <BetPanel bet={bet} chips={chips} busy={busy || dealing} onChange={setBet} onSubmit={deal} submitLabel="Deal" />
-          ) : (
-            <p className="text-neutral-300">You're out of chips.</p>
-          )
-        }
       />
     </GameShell>
   )

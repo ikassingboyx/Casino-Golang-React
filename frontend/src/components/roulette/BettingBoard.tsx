@@ -78,8 +78,8 @@ export default function BettingBoard({ bets, onPlace, disabled, winningNumber }:
   const winSpot = winningNumber !== null ? spots[`straight-${winningNumber}`] : undefined
 
   return (
-    <div className="w-full overflow-x-auto">
-      <div className="relative min-w-[600px]" style={{ aspectRatio: `${BOARD_W} / ${BOARD_H}` }}>
+    <div className="w-full">
+      <div className="relative w-full" style={{ aspectRatio: `${BOARD_W} / ${BOARD_H}` }}>
         <div
           onClick={handleClick}
           className={`absolute inset-0 ${disabled ? 'pointer-events-none' : ''}`}
@@ -89,7 +89,7 @@ export default function BettingBoard({ bets, onPlace, disabled, winningNumber }:
         <div className="pointer-events-none absolute inset-0">
           {winSpot && (
             <div
-              className="absolute aspect-square animate-pulse rounded-full ring-4 ring-yellow-300 shadow-[0_0_24px_rgba(253,224,71,0.8)]"
+              className="absolute aspect-square animate-pulse rounded-full ring-4 ring-brass-light shadow-[0_0_24px_rgba(230,200,120,0.8)]"
               style={{ left: `${(winSpot.x / BOARD_W) * 100}%`, top: `${(winSpot.y / BOARD_H) * 100}%`, width: '6%', transform: 'translate(-50%, -50%)' }}
             />
           )}

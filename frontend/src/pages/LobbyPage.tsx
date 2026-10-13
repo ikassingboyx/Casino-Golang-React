@@ -8,7 +8,7 @@ import type { GameType } from '../types/game'
 const games: { id: GameType; name: string; ready: boolean }[] = [
   { id: 'blackjack', name: 'Blackjack', ready: true },
   { id: 'poker', name: 'Poker', ready: false },
-  { id: 'baccarat', name: 'Baccarat', ready: false },
+  { id: 'baccarat', name: 'Baccarat', ready: true },
   { id: 'roulette', name: 'Roulette', ready: true },
 ]
 

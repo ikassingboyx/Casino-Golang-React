@@ -10,6 +10,7 @@ interface Props {
   // Position in the real dealing order (lower is dealt first) for cards that
   // arrive together. A reveal (face-down → face-up) uses dealOrder + 100.
   dealOrder?: number
+  marginLeft?: number // negative to tuck under the previous card
 }
 
 const BACK = '/assets/cards/back.svg'
@@ -28,7 +29,7 @@ function offsetTo(target: Element | null | undefined, el: Element) {
 // the shoe (flying face-down, turning over as it lands), flips when it is
 // revealed, slides when its row changes and flies to the discard tray when
 // removed (inside AnimatePresence).
-export default function Card({ card, width = 96, dealOrder = 0 }: Props) {
+export default function Card({ card, width = 96, dealOrder = 0, marginLeft = 0 }: Props) {
   const deal = useDeal()
   const reduceMotion = useReducedMotion()
   const [scope, animate] = useAnimate<HTMLDivElement>()
@@ -115,7 +116,7 @@ export default function Card({ card, width = 96, dealOrder = 0 }: Props) {
   const face = 'absolute inset-0 h-full w-full rounded-[6%] shadow-[0_6px_14px_rgba(0,0,0,0.35)] [backface-visibility:hidden]'
   return (
     // The slot slides when the row's layout changes; the inner element flies.
-    <motion.div layout transition={{ type: 'spring', stiffness: 380, damping: 32 }} style={{ width, height }} className="relative">
+    <motion.div layout transition={{ type: 'spring', stiffness: 380, damping: 32 }} style={{ width, height, marginLeft }} className="relative">
       <div ref={scope} className="relative h-full w-full [perspective:900px]">
         {/* No filter (e.g. drop-shadow) on the 3D element: it would flatten
             the flip and show the face mirrored instead of the back. */}
