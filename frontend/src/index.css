@@ -30,6 +30,10 @@ body {
   .table-d-tall {
     border-radius: 5% 5% 50% 50% / 3% 3% 38% 38%;
   }
+  /* Poker: an oval with seats all around. */
+  .table-oval {
+    border-radius: 50%;
+  }
   .table-rail {
     background: radial-gradient(120% 90% at 50% 0%, #5a2219 0%, #3b1712 55%, #250d09 100%);
     box-shadow:

@@ -28,7 +28,7 @@ export interface BaseGameState {
   gameType: GameType
   phase: string
   isOffline: boolean
-  status: 'active' | 'completed'
+  status: string // e.g. 'playing', 'finished' (poker)
   lastAction?: LastAction
 }
 

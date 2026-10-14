@@ -6,17 +6,24 @@ const LANDSCAPE = 2.05 // table width / height
 const PORTRAIT = 0.72
 const MAX_WIDTH = 1600
 
-// The D-shaped card table, as big as fits in its parent. Children are laid
-// out on the felt with absolute positions (percentages) and sizes in table
-// units (useTableSize).
-export default function TableStage({ children }: { children: ReactNode }) {
+interface Props {
+  // 'd': flat dealer edge at the top, seats along the curve (blackjack,
+  // baccarat). 'oval': a poker table with seats all around.
+  shape?: 'd' | 'oval'
+  children: ReactNode
+}
+
+// The card table, as big as fits in its parent. Children are laid out on the
+// felt with absolute positions (percentages) and sizes in table units
+// (useTableSize).
+export default function TableStage({ shape: kind = 'd', children }: Props) {
   const [ref, box] = useElementSize<HTMLDivElement>()
   const portrait = box.width / Math.max(box.height, 1) < 1.1
   const aspect = portrait ? PORTRAIT : LANDSCAPE
   const width = Math.floor(Math.min(box.width, box.height * aspect, MAX_WIDTH))
   const height = Math.floor(width / aspect)
   const u = portrait ? width / 62 : width / 100
-  const shape = portrait ? 'table-d-tall' : 'table-d'
+  const shape = kind === 'oval' ? 'table-oval' : portrait ? 'table-d-tall' : 'table-d'
 
   return (
     <div ref={ref} className="flex h-full w-full items-center justify-center">

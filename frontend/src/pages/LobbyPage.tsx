@@ -9,7 +9,7 @@ import { useAuthStore } from '../store/authStore'
 // Stations on the casino floor, left to right (scene coordinates).
 const spots: Spot[] = [
   { id: 'blackjack', name: 'Blackjack', x: 40, y: 440, ready: true },
-  { id: 'poker', name: 'Poker', x: 505, y: 415, ready: false },
+  { id: 'poker', name: 'Poker', x: 505, y: 415, ready: true },
   { id: 'baccarat', name: 'Baccarat', x: 975, y: 415, ready: true },
   { id: 'roulette', name: 'Roulette', x: 1440, y: 440, ready: true },
 ]

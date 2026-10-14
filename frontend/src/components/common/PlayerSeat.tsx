@@ -77,7 +77,7 @@ export default function PlayerSeat({ player, isYou, active, result, children }: 
   )
 }
 
-function Avatar({ name, src, size }: { name: string; src?: string | null; size: number }) {
+export function Avatar({ name, src, size }: { name: string; src?: string | null; size: number }) {
   if (src) return <img src={src} alt="" referrerPolicy="no-referrer" className="shrink-0 rounded-full object-cover" style={{ width: size, height: size }} />
   return (
     <span

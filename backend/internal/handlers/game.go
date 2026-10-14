@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 
+	"casino/internal/bot"
 	"casino/internal/game"
 	"casino/internal/models"
 
@@ -23,6 +24,15 @@ type GameHandler struct {
 
 func NewGameHandler(db *sql.DB) *GameHandler {
 	return &GameHandler{db: db}
+}
+
+// newEngine returns the engine for a game type with its bots attached.
+func newEngine(gameType string) (game.GameEngine, bool) {
+	engine, ok := game.NewEngine(gameType)
+	if poker, isPoker := engine.(*game.PokerEngine); isPoker {
+		poker.Bot = bot.NewPokerBot()
+	}
+	return engine, ok
 }
 
 type gameResponse struct {
@@ -44,7 +54,7 @@ func (h *GameHandler) StartOffline(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	engine, ok := game.NewEngine(req.GameType)
+	engine, ok := newEngine(req.GameType)
 	if !ok {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "game not available: " + req.GameType})
 		return
@@ -77,12 +87,33 @@ func (h *GameHandler) StartOffline(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	id, err := models.CreateOfflineGame(ctx, h.db, userID, req.GameType, state)
+	resp, status, err := h.createGame(ctx, engine, req.GameType, userID, user.Chips, state)
 	if err != nil {
-		h.serverError(c, "create game", err)
+		if status == http.StatusInternalServerError {
+			h.serverError(c, "create game", err)
+			return
+		}
+		c.JSON(status, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, gameResponse{GameID: id, State: engine.GetStateForPlayer(state, userID), Chips: user.Chips})
+	c.JSON(http.StatusOK, resp)
+}
+
+// createGame stores a new game. Starting a game can already move chips (poker
+// blinds) or even finish the round (everyone folds to the big blind), so this
+// settles it like an action.
+func (h *GameHandler) createGame(ctx context.Context, engine game.GameEngine, gameType, userID string, chipsBefore int64, state any) (*gameResponse, int, error) {
+	tx, err := h.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, http.StatusInternalServerError, err
+	}
+	defer tx.Rollback()
+
+	id, err := models.CreateOfflineGame(ctx, tx, userID, gameType, state)
+	if err != nil {
+		return nil, http.StatusInternalServerError, err
+	}
+	return h.settle(ctx, tx, engine, &models.StoredGame{ID: id, GameType: gameType}, userID, chipsBefore, state, "start")
 }
 
 type offlineActionRequest struct {
@@ -130,7 +161,7 @@ func (h *GameHandler) applyAction(ctx context.Context, userID string, req offlin
 	if stored.Status != "active" {
 		return nil, http.StatusConflict, errors.New("this round is over; start a new one")
 	}
-	engine, ok := game.NewEngine(stored.GameType)
+	engine, ok := newEngine(stored.GameType)
 	if !ok {
 		return nil, http.StatusBadRequest, errors.New("game not available: " + stored.GameType)
 	}
@@ -145,7 +176,14 @@ func (h *GameHandler) applyAction(ctx context.Context, userID string, req offlin
 		return nil, http.StatusBadRequest, err
 	}
 
+	return h.settle(ctx, tx, engine, stored, userID, chipsBefore, state, req.Action.Type)
+}
+
+// settle resolves the round if it is over, applies the chips the engine moved
+// for the user since chipsBefore to their balance, saves the game and commits.
+func (h *GameHandler) settle(ctx context.Context, tx *sql.Tx, engine game.GameEngine, stored *models.StoredGame, userID string, chipsBefore int64, state any, what string) (*gameResponse, int, error) {
 	var result *models.ChipChange
+	var err error
 	over := engine.IsRoundOver(state)
 	if over {
 		var changes []models.ChipChange
@@ -166,7 +204,7 @@ func (h *GameHandler) applyAction(ctx context.Context, userID string, req offlin
 	}
 	balance := user.Chips
 	if delta := engine.PlayerChips(state, userID) - chipsBefore; delta != 0 {
-		desc := fmt.Sprintf("%s: %s", stored.GameType, req.Action.Type)
+		desc := fmt.Sprintf("%s: %s", stored.GameType, what)
 		balance, err = models.ApplyChipChange(ctx, tx, userID, stored.ID, delta, desc)
 		if errors.Is(err, models.ErrInsufficientChips) {
 			return nil, http.StatusConflict, err
