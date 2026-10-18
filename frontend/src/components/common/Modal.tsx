@@ -1,4 +1,5 @@
 import { useEffect, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 
 interface Props {
@@ -17,7 +18,9 @@ export default function Modal({ open, onClose, label, children }: Props) {
     return () => window.removeEventListener('keydown', onKey)
   }, [open, onClose])
 
-  return (
+  // Rendered into <body>: an ancestor with a transform or backdrop-filter
+  // (e.g. the blurred badge in the lobby) would otherwise clip the overlay.
+  return createPortal(
     <AnimatePresence>
       {open && (
         <motion.div
@@ -31,7 +34,7 @@ export default function Modal({ open, onClose, label, children }: Props) {
             role="dialog"
             aria-modal="true"
             aria-label={label}
-            className="relative w-full max-w-md rounded-2xl bg-gradient-to-b from-[#2a0d09] to-[#160705] p-6 text-ivory shadow-[0_30px_80px_rgba(0,0,0,0.7)] ring-1 ring-brass/40"
+            className="relative max-h-[calc(100svh-2rem)] w-full max-w-md overflow-y-auto rounded-2xl bg-gradient-to-b from-[#2a0d09] to-[#160705] p-6 text-ivory shadow-[0_30px_80px_rgba(0,0,0,0.7)] ring-1 ring-brass/40"
             initial={{ y: 16, scale: 0.97 }}
             animate={{ y: 0, scale: 1 }}
             exit={{ y: 8, scale: 0.98 }}
@@ -50,6 +53,7 @@ export default function Modal({ open, onClose, label, children }: Props) {
           </motion.div>
         </motion.div>
       )}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body,
   )
 }
