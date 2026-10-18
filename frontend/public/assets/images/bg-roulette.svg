@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080" width="1920" height="1080" preserveAspectRatio="xMidYMid slice">
+<defs>
+  <linearGradient id="wall" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#160205"/><stop offset=".55" stop-color="#4a0a10"/><stop offset="1" stop-color="#2a0407"/>
+  </linearGradient>
+  <linearGradient id="carpet" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#5a0a10"/><stop offset=".5" stop-color="#9c1520"/><stop offset="1" stop-color="#c8262c"/>
+  </linearGradient>
+  <linearGradient id="gold" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#ffe7a3"/><stop offset=".5" stop-color="#e2a83c"/><stop offset="1" stop-color="#9a6416"/>
+  </linearGradient>
+  <linearGradient id="goldH" x1="0" y1="0" x2="1" y2="0">
+    <stop offset="0" stop-color="#9a6416"/><stop offset=".5" stop-color="#ffe7a3"/><stop offset="1" stop-color="#9a6416"/>
+  </linearGradient>
+  <linearGradient id="seat" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#e2343a"/><stop offset="1" stop-color="#7a0b12"/>
+  </linearGradient>
+  <linearGradient id="wood" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#6b2a14"/><stop offset="1" stop-color="#2a0c05"/>
+  </linearGradient>
+  <linearGradient id="drape" x1="0" y1="0" x2="1" y2="0">
+    <stop offset="0" stop-color="#3a0509"/><stop offset=".25" stop-color="#8a1018"/><stop offset=".5" stop-color="#4a070c"/>
+    <stop offset=".75" stop-color="#8a1018"/><stop offset="1" stop-color="#3a0509"/>
+  </linearGradient>
+  <radialGradient id="felt" cx=".5" cy=".4" r=".65">
+    <stop offset="0" stop-color="#2f8a63"/><stop offset=".6" stop-color="#1d6247"/><stop offset="1" stop-color="#0f3a29"/>
+  </radialGradient>
+  <radialGradient id="glow" cx=".5" cy=".5" r=".5">
+    <stop offset="0" stop-color="#ffd27a" stop-opacity=".95"/><stop offset=".35" stop-color="#ff8a2a" stop-opacity=".45"/><stop offset="1" stop-color="#ff5a1a" stop-opacity="0"/>
+  </radialGradient>
+  <radialGradient id="bulbG" cx=".5" cy=".5" r=".5">
+    <stop offset="0" stop-color="#fff8e0"/><stop offset=".25" stop-color="#ffd77a"/><stop offset=".6" stop-color="#ff9a30" stop-opacity=".45"/><stop offset="1" stop-color="#ff7a20" stop-opacity="0"/>
+  </radialGradient>
+  <radialGradient id="vignette" cx=".5" cy=".45" r=".75">
+    <stop offset=".45" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".8"/>
+  </radialGradient>
+  <radialGradient id="shadow" cx=".5" cy=".5" r=".5">
+    <stop offset="0" stop-color="#000" stop-opacity=".55"/><stop offset="1" stop-color="#000" stop-opacity="0"/>
+  </radialGradient>
+  <g id="bulb"><circle r="9" fill="url(#bulbG)"/><circle r="2.6" fill="#fffaf0" stroke="#a8660f" stroke-width=".8"/></g>
+  <g id="spark"><path d="M0-9 1.6-1.6 9 0 1.6 1.6 0 9-1.6 1.6-9 0-1.6-1.6Z" fill="#fff1c4"/></g>
+  <filter id="sketch" filterUnits="userSpaceOnUse" x="0" y="0" width="1920" height="1080">
+    <feTurbulence type="fractalNoise" baseFrequency=".018" numOctaves="2" seed="10" result="n"/>
+    <feDisplacementMap in="SourceGraphic" in2="n" scale="5" xChannelSelector="R" yChannelSelector="G"/>
+  </filter>
+  <filter id="soft" x="-150%" y="-150%" width="400%" height="400%"><feGaussianBlur stdDeviation="3"/></filter>
+  <filter id="softer" x="-150%" y="-150%" width="400%" height="400%"><feGaussianBlur stdDeviation="8"/></filter>
+  <filter id="grain" x="0" y="0" width="100%" height="100%">
+    <feTurbulence type="fractalNoise" baseFrequency=".9" numOctaves="2" seed="11"/>
+    <feColorMatrix values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 .55 0"/>
+  </filter>
+</defs>
+<defs><pattern id="rug" patternUnits="userSpaceOnUse" width="220" height="220"><path d="M134.0 90.0 L128.1 112.0 L114.2 104.0 L118.0 90.0Z" fill="#1a0804" opacity=".38"/><path d="M128.1 112.0 L112.0 128.1 L104.0 114.2 L114.2 104.0Z" fill="#c8262c" opacity=".38"/><path d="M112.0 128.1 L90.0 134.0 L90.0 118.0 L104.0 114.2Z" fill="#1a0804" opacity=".38"/><path d="M90.0 134.0 L68.0 128.1 L76.0 114.2 L90.0 118.0Z" fill="#c8262c" opacity=".38"/><path d="M68.0 128.1 L51.9 112.0 L65.8 104.0 L76.0 114.2Z" fill="#1a0804" opacity=".38"/><path d="M51.9 112.0 L46.0 90.0 L62.0 90.0 L65.8 104.0Z" fill="#c8262c" opacity=".38"/><path d="M46.0 90.0 L51.9 68.0 L65.8 76.0 L62.0 90.0Z" fill="#1a0804" opacity=".38"/><path d="M51.9 68.0 L68.0 51.9 L76.0 65.8 L65.8 76.0Z" fill="#c8262c" opacity=".38"/><path d="M68.0 51.9 L90.0 46.0 L90.0 62.0 L76.0 65.8Z" fill="#1a0804" opacity=".38"/><path d="M90.0 46.0 L112.0 51.9 L104.0 65.8 L90.0 62.0Z" fill="#c8262c" opacity=".38"/><path d="M112.0 51.9 L128.1 68.0 L114.2 76.0 L104.0 65.8Z" fill="#1a0804" opacity=".38"/><path d="M128.1 68.0 L134.0 90.0 L118.0 90.0 L114.2 76.0Z" fill="#c8262c" opacity=".38"/><circle cx="90" cy="90" r="46" fill="none" stroke="#e2a83c" stroke-width="2.5" opacity=".6"/><circle cx="90" cy="90" r="27" fill="none" stroke="#e2a83c" stroke-width="2" opacity=".5"/><circle cx="90" cy="90" r="7" fill="#e2a83c" opacity=".6"/><circle cx="0" cy="0" r="4" fill="#e2a83c" opacity=".45"/><circle cx="180" cy="0" r="4" fill="#e2a83c" opacity=".45"/><circle cx="0" cy="180" r="4" fill="#e2a83c" opacity=".45"/><circle cx="180" cy="180" r="4" fill="#e2a83c" opacity=".45"/></pattern></defs>
+<rect width="1920" height="1080" fill="#5a0c12"/>
+<g filter="url(#sketch)" opacity=".6"><rect width="1920" height="1080" fill="url(#rug)"/></g>
+<rect width="1920" height="1080" filter="url(#grain)" opacity=".15"/>
+</svg>

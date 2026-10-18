@@ -17,11 +17,6 @@ frontend/dist/
 .SPEC.md
 .PROJECT_STRUCTURE.md
 
-# Frontend assets (cards, chips, images) - keep only the naming READMEs
-frontend/public/assets/**
-!frontend/public/assets/**/
-!frontend/public/assets/**/README.md
-
 # Locally installed Claude skills and agent tooling
 .claude/skills/
 .agents/
