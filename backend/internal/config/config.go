@@ -3,6 +3,7 @@ package config
 import (
 	"errors"
 	"os"
+	"strings"
 
 	"github.com/joho/godotenv"
 )
@@ -14,6 +15,9 @@ type Config struct {
 	DatabaseURL string
 	JWTSecret   string
 	JWTExpiry   string
+	// TrustedProxies are the reverse proxies (IPs or CIDRs) whose
+	// X-Forwarded-For header is believed; none by default.
+	TrustedProxies []string
 
 	GoogleClientID     string
 	GoogleClientSecret string
@@ -37,9 +41,11 @@ func Load() *Config {
 		Port:        port,
 		APIURL:      getEnv("API_URL", "http://localhost:"+port),
 		FrontendURL: getEnv("FRONTEND_URL", "http://localhost:5173"),
-		DatabaseURL: getEnv("DATABASE_URL", "postgres://casino:password@localhost:5432/casino_db?sslmode=disable"),
+		DatabaseURL: getEnv("DATABASE_URL", "postgres://casino:wwawwa123@localhost:5432/casino_db?sslmode=disable"),
 		JWTSecret:   os.Getenv("JWT_SECRET"),
 		JWTExpiry:   getEnv("JWT_EXPIRY", "168h"),
+
+		TrustedProxies: splitList(os.Getenv("TRUSTED_PROXIES")),
 
 		GoogleClientID:     os.Getenv("GOOGLE_CLIENT_ID"),
 		GoogleClientSecret: os.Getenv("GOOGLE_CLIENT_SECRET"),
@@ -65,6 +71,16 @@ func (c *Config) Validate() error {
 		return errors.New("JWT_SECRET is too short; use at least 32 characters (openssl rand -base64 48)")
 	}
 	return nil
+}
+
+func splitList(s string) []string {
+	var out []string
+	for _, v := range strings.Split(s, ",") {
+		if v = strings.TrimSpace(v); v != "" {
+			out = append(out, v)
+		}
+	}
+	return out
 }
 
 func getEnv(key, fallback string) string {

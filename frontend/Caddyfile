@@ -1,0 +1,74 @@
+# Serves the built app and proxies the API and WebSocket to the backend, all
+# on one origin (no CORS, one domain, one certificate).
+#
+# SITE_ADDRESS is what Caddy listens for:
+#   :80                  plain HTTP on any host (local Docker; or behind a load
+#                        balancer that already terminates HTTPS)
+#   casino.example.com   HTTPS for that domain: Caddy gets and renews the
+#                        Let's Encrypt certificate and redirects HTTP to HTTPS
+#
+# No access log on purpose, and the token is cut from the error log: the
+# WebSocket URL carries the login token (/ws?token=...).
+{
+	log default {
+		format filter {
+			wrap json
+			fields {
+				request>uri query {
+					delete token
+				}
+			}
+		}
+	}
+}
+
+{$SITE_ADDRESS::80} {
+	encode zstd gzip
+
+	handle /api/* {
+		request_body {
+			max_size 1MB
+		}
+		reverse_proxy backend:8080
+	}
+
+	# WebSocket upgrades are proxied automatically.
+	handle /ws {
+		reverse_proxy backend:8080
+	}
+
+	root * /srv
+
+	# Built bundles and artwork; a missing file is a 404, not the app.
+	handle /assets/* {
+		file_server
+	}
+
+	# Client-side routes (/lobby, /room/12345, ...) all load index.html.
+	handle {
+		try_files {path} /index.html
+		file_server
+	}
+
+	# Bundles have a content hash in their name and never change; the
+	# artwork may be replaced, and index.html must always be fresh.
+	@hashed path_regexp ^/assets/[^/]+-[A-Za-z0-9_-]{8}\.(js|css)$
+	header @hashed Cache-Control "public, max-age=31536000, immutable"
+	@art path /assets/cards/* /assets/chips/* /assets/images/* /assets/roulette/* /favicon.svg
+	header @art Cache-Control "public, max-age=86400"
+	@html not path /assets/* /favicon.svg /api/* /ws
+	header @html Cache-Control "no-cache"
+
+	header {
+		# Ignored by browsers over plain HTTP, so harmless locally.
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options nosniff
+		X-Frame-Options DENY
+		Referrer-Policy strict-origin-when-cross-origin
+		Permissions-Policy "camera=(), microphone=(), geolocation=()"
+		# Avatars come from the OAuth providers (https:); fonts from Google Fonts;
+		# framer-motion sets inline styles.
+		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' ws://{hostport} wss://{hostport}; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+		-Server
+	}
+}

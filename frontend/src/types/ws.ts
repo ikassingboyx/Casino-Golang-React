@@ -1,10 +1,22 @@
+// Envelope of every WebSocket message. A request may carry an id; the
+// server's `ack` for it echoes the id.
 export interface WSMessage<T = unknown> {
-  type: string
+  type: WSMessageType
+  id?: string
   data?: T
 }
 
 export type WSMessageType =
-  | 'game_state' | 'player_joined' | 'player_left'
-  | 'game_started' | 'action_result' | 'game_over'
-  | 'timer_tick' | 'error' | 'pong'
-  | 'start_game' | 'player_action' | 'place_bet' | 'leave_room' | 'ping'
+  // server → client
+  | 'room_state' | 'game_state' | 'ack' | 'error' | 'pong'
+  // client → server
+  | 'start_game' | 'player_action' | 'add_bot' | 'remove_bot' | 'leave_room' | 'ping'
+
+export interface WSAck {
+  error?: string
+}
+
+export interface WSError {
+  message: string
+  fatal?: boolean // the server closed the connection: no such table, table full…
+}

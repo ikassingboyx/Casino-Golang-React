@@ -3,21 +3,20 @@ package handlers
 import (
 	"database/sql"
 	"errors"
+	"log"
 	"net/http"
 
-	"casino/internal/config"
 	"casino/internal/models"
 
 	"github.com/gin-gonic/gin"
 )
 
 type UserHandler struct {
-	db  *sql.DB
-	cfg *config.Config
+	db *sql.DB
 }
 
-func NewUserHandler(db *sql.DB, cfg *config.Config) *UserHandler {
-	return &UserHandler{db: db, cfg: cfg}
+func NewUserHandler(db *sql.DB) *UserHandler {
+	return &UserHandler{db: db}
 }
 
 func (h *UserHandler) GetMe(c *gin.Context) {
@@ -34,12 +33,17 @@ func (h *UserHandler) GetMe(c *gin.Context) {
 	c.JSON(http.StatusOK, user)
 }
 
-func (h *UserHandler) UpdateMe(c *gin.Context) {
-	// TODO: implement
-	c.JSON(http.StatusNotImplemented, gin.H{"error": "not implemented"})
-}
-
-func (h *UserHandler) ClaimDailyBonus(c *gin.Context) {
-	// TODO: implement — 500 chips, once per 24h
-	c.JSON(http.StatusNotImplemented, gin.H{"error": "not implemented"})
+// ClaimChips adds the hourly chip top-up to the user's balance.
+func (h *UserHandler) ClaimChips(c *gin.Context) {
+	user, err := models.ClaimChips(c.Request.Context(), h.db, c.GetString("userID"))
+	if errors.Is(err, models.ErrChipClaimTooSoon) {
+		c.JSON(http.StatusTooManyRequests, gin.H{"error": err.Error()})
+		return
+	}
+	if err != nil {
+		log.Printf("users: claim chips: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not add chips"})
+		return
+	}
+	c.JSON(http.StatusOK, user)
 }

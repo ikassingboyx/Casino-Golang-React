@@ -99,17 +99,17 @@ func TestBaccaratRound(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := e.HandleAction(raw, "u", models.Action{Type: "deal", Bets: []models.RouletteBet{{Type: "player", Amount: 2000}}}); err == nil {
+	if _, err := e.HandleAction(raw, "u", models.Action{Type: "deal", Bets: []models.Bet{{Type: "player", Amount: 2000}}}); err == nil {
 		t.Error("expected an error for bets above the balance")
 	}
-	if _, err := e.HandleAction(raw, "u", models.Action{Type: "deal", Bets: []models.RouletteBet{{Type: "dragon", Amount: 10}}}); err == nil {
+	if _, err := e.HandleAction(raw, "u", models.Action{Type: "deal", Bets: []models.Bet{{Type: "dragon", Amount: 10}}}); err == nil {
 		t.Error("expected an error for an unknown bet")
 	}
 	if _, err := e.HandleAction(raw, "u", models.Action{Type: "deal"}); err == nil {
 		t.Error("expected an error without bets")
 	}
 
-	bets := []models.RouletteBet{{Type: "player", Amount: 100}, {Type: "player", Amount: 50}, {Type: "banker", Amount: 100}}
+	bets := []models.Bet{{Type: "player", Amount: 100}, {Type: "player", Amount: 50}, {Type: "banker", Amount: 100}}
 	raw, err = e.HandleAction(raw, "u", models.Action{Type: "deal", Bets: bets})
 	if err != nil {
 		t.Fatal(err)

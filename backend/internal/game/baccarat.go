@@ -2,7 +2,6 @@ package game
 
 import (
 	"casino/internal/models"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"strconv"
@@ -34,7 +33,7 @@ func (e *BaccaratEngine) StartGame(players []models.Player, settings map[string]
 		bp[i] = models.BaccaratPlayer{Player: p}
 	}
 	return &BaccaratState{models.BaccaratGameState{
-		BaseGameState: models.BaseGameState{GameType: "baccarat", Phase: "betting", IsOffline: true},
+		BaseGameState: models.BaseGameState{GameType: "baccarat", Phase: "betting"},
 		PlayerHand:    models.BaccaratHand{Cards: []models.Card{}},
 		BankerHand:    models.BaccaratHand{Cards: []models.Card{}},
 		Players:       bp,
@@ -49,29 +48,71 @@ func (e *BaccaratEngine) HandleAction(raw any, playerID string, action models.Ac
 	if action.Type != "deal" {
 		return nil, fmt.Errorf("unknown action: %s", action.Type)
 	}
-	pi := findBaccaratPlayer(state, playerID)
+	pi := playerIndex(state.Players, playerID)
 	if pi < 0 {
 		return nil, errors.New("player not found")
+	}
+	p := &state.Players[pi]
+	if hasBaccaratBets(p) {
+		return nil, errors.New("you have already bet this coup")
 	}
 	bets, total, err := baccaratBets(action.Bets)
 	if err != nil {
 		return nil, err
 	}
-	p := &state.Players[pi]
 	if total > p.Chips {
 		return nil, errors.New("not enough chips for these bets")
 	}
 
 	p.Chips -= total
 	p.Bets = bets
+	// The coup is dealt once the whole table has bet (online, Timeout deals
+	// with the bets placed when the clock runs out).
+	for i := range state.Players {
+		if !hasBaccaratBets(&state.Players[i]) {
+			return state, nil
+		}
+	}
+	dealBaccarat(state)
+	return state, nil
+}
+
+func hasBaccaratBets(p *models.BaccaratPlayer) bool {
+	return p.Bets.Player+p.Bets.Banker+p.Bets.Tie > 0
+}
+
+func dealBaccarat(state *BaccaratState) {
 	shoe := newBaccaratShoe()
 	state.PlayerHand, state.BankerHand = dealCoup(&shoe)
 	state.Phase = "resolved"
+}
+
+// Waiting: once someone has bet, the rest of the table's bets.
+func (e *BaccaratEngine) Waiting(raw any) (Waiting, bool) {
+	state := raw.(*BaccaratState)
+	if state.Phase != "betting" {
+		return Waiting{}, false
+	}
+	for i := range state.Players {
+		if hasBaccaratBets(&state.Players[i]) {
+			return Waiting{Key: "bets", Betting: true}, true
+		}
+	}
+	return Waiting{}, false
+}
+
+// Timeout deals the coup with the bets placed so far.
+func (e *BaccaratEngine) Timeout(raw any) (any, error) {
+	state := raw.(*BaccaratState)
+	if _, ok := e.Waiting(state); !ok {
+		return nil, errors.New("nothing to time out")
+	}
+	dealBaccarat(state)
 	return state, nil
 }
 
 // baccaratBets validates the stakes and adds them up per spot.
-func baccaratBets(in []models.RouletteBet) (models.BaccaratBets, int64, error) {
+func baccaratBets(in []models.Bet) (models.BaccaratBets, int64, error) {
 	var bets models.BaccaratBets
 	var total int64
 	for _, b := range in {
@@ -182,15 +223,6 @@ func baccaratPayouts(bets models.BaccaratBets, result string) models.BaccaratBet
 	return pay
 }
 
-func findBaccaratPlayer(state *BaccaratState, id string) int {
-	for i, p := range state.Players {
-		if p.ID == id {
-			return i
-		}
-	}
-	return -1
-}
-
 func (e *BaccaratEngine) GetStateForPlayer(raw any, playerID string) any {
 	// All cards are face up and no shoe is kept, so nothing is hidden.
 	return &raw.(*BaccaratState).BaccaratGameState
@@ -221,25 +253,15 @@ func (e *BaccaratEngine) ResolveRound(raw any) (any, []models.ChipChange, error)
 		returned := p.Payouts.Player + p.Payouts.Banker + p.Payouts.Tie
 		staked := p.Bets.Player + p.Bets.Banker + p.Bets.Tie
 		p.Chips += returned
-		// Baccarat is single-player, so the state's chipChange is that player's.
+		// Offline the state's chipChange is the one player's result.
 		state.ChipChange = returned - staked
 		changes = append(changes, models.ChipChange{PlayerID: p.ID, Amount: returned - staked})
 	}
 	return state, changes, nil
 }
 
-func (e *BaccaratEngine) LoadState(data []byte) (any, error) {
-	var state BaccaratState
-	if err := json.Unmarshal(data, &state); err != nil {
-		return nil, err
-	}
-	return &state, nil
-}
+func (e *BaccaratEngine) LoadState(data []byte) (any, error) { return loadState[BaccaratState](data) }
 
 func (e *BaccaratEngine) PlayerChips(raw any, playerID string) int64 {
-	state := raw.(*BaccaratState)
-	if i := findBaccaratPlayer(state, playerID); i >= 0 {
-		return state.Players[i].Chips
-	}
-	return 0
+	return playerChips(raw.(*BaccaratState).Players, playerID)
 }

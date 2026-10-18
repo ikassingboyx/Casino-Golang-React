@@ -65,7 +65,7 @@ func sameNumbers(a, b []int) bool {
 	return true
 }
 
-func spinWith(t *testing.T, winning int, chips int64, bets ...models.RouletteBet) (*RouletteState, error) {
+func spinWith(t *testing.T, winning int, chips int64, bets ...models.Bet) (*RouletteState, error) {
 	t.Helper()
 	orig := spinWheel
 	spinWheel = func() (int, error) { return winning, nil }
@@ -80,8 +80,8 @@ func spinWith(t *testing.T, winning int, chips int64, bets ...models.RouletteBet
 	return out.(*RouletteState), nil
 }
 
-func bet(t string, amount int64) models.RouletteBet {
-	return models.RouletteBet{Type: t, Amount: amount}
+func bet(t string, amount int64) models.Bet {
+	return models.Bet{Type: t, Amount: amount}
 }
 
 func TestRoulettePayouts(t *testing.T) {
@@ -123,7 +123,7 @@ func TestRoulettePayouts(t *testing.T) {
 
 func TestRouletteZeroLosesOutsideBets(t *testing.T) {
 	outside := []string{"red", "black", "odd", "even", "low", "high", "dozen-1", "column-1"}
-	var bets []models.RouletteBet
+	var bets []models.Bet
 	for _, b := range outside {
 		bets = append(bets, bet(b, 10))
 	}
@@ -151,7 +151,7 @@ func TestRouletteMergesRepeatedSpots(t *testing.T) {
 }
 
 func TestRouletteRejectsBadBets(t *testing.T) {
-	cases := map[string][]models.RouletteBet{
+	cases := map[string][]models.Bet{
 		"no bets":        nil,
 		"unknown spot":   {bet("split-1-5", 10)},
 		"zero amount":    {bet("red", 0)},
@@ -168,7 +168,7 @@ func TestRouletteRejectsBadBets(t *testing.T) {
 
 func TestRouletteIgnoresClientNumbers(t *testing.T) {
 	// The client claims "red" covers 17; the server's table must win.
-	s, err := spinWith(t, 17, 1000, models.RouletteBet{Type: "red", Numbers: []int{17}, Amount: 10})
+	s, err := spinWith(t, 17, 1000, models.Bet{Type: "red", Numbers: []int{17}, Amount: 10})
 	if err != nil {
 		t.Fatal(err)
 	}

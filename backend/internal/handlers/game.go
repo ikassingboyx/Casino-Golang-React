@@ -26,15 +26,6 @@ func NewGameHandler(db *sql.DB) *GameHandler {
 	return &GameHandler{db: db}
 }
 
-// newEngine returns the engine for a game type with its bots attached.
-func newEngine(gameType string) (game.GameEngine, bool) {
-	engine, ok := game.NewEngine(gameType)
-	if poker, isPoker := engine.(*game.PokerEngine); isPoker {
-		poker.Bot = bot.NewPokerBot()
-	}
-	return engine, ok
-}
-
 type gameResponse struct {
 	GameID string             `json:"gameId"`
 	State  any                `json:"state"`
@@ -54,7 +45,7 @@ func (h *GameHandler) StartOffline(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	engine, ok := newEngine(req.GameType)
+	engine, ok := bot.NewEngine(req.GameType)
 	if !ok {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "game not available: " + req.GameType})
 		return
@@ -161,7 +152,7 @@ func (h *GameHandler) applyAction(ctx context.Context, userID string, req offlin
 	if stored.Status != "active" {
 		return nil, http.StatusConflict, errors.New("this round is over; start a new one")
 	}
-	engine, ok := newEngine(stored.GameType)
+	engine, ok := bot.NewEngine(stored.GameType)
 	if !ok {
 		return nil, http.StatusBadRequest, errors.New("game not available: " + stored.GameType)
 	}

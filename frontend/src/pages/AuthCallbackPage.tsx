@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { getMe } from '../api/user'
 import { useAuthStore } from '../store/authStore'
+import { takeReturnPath } from '../utils/returnPath'
 
 // The backend redirects here after a social login with the JWT in the URL
 // fragment (#token=...). Store it, load the user, then go to the app.
@@ -24,7 +25,7 @@ export default function AuthCallbackPage() {
     getMe()
       .then(res => {
         useAuthStore.getState().login(token, res.data)
-        navigate('/', { replace: true })
+        navigate(takeReturnPath() ?? '/', { replace: true })
       })
       .catch(() => {
         useAuthStore.getState().logout()

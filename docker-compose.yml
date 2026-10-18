@@ -1,36 +1,79 @@
+# The whole app: docker compose up -d --build   (see DOCKER_SPEC.md)
+#
+# Settings come from .env next to this file (copy .env.example). Only the web
+# service is reachable from outside; the backend and database are on the
+# internal network.
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
   postgres:
     image: postgres:16-alpine
+    restart: unless-stopped
     environment:
       POSTGRES_DB: casino_db
       POSTGRES_USER: casino
-      POSTGRES_PASSWORD: password
-    ports:
-      - "5432:5432"
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U casino -d casino_db"]
       interval: 5s
       timeout: 5s
-      retries: 5
+      retries: 10
+    logging: *logging
 
   backend:
     build: ./backend
-    ports:
-      - "8080:8080"
-    env_file: .env
+    image: ${IMAGE_PREFIX:-casino}-backend:${IMAGE_TAG:-latest}
+    restart: unless-stopped
     depends_on:
       postgres:
         condition: service_healthy
-
-  frontend:
-    build: ./frontend
-    ports:
-      - "5173:5173"
     environment:
-      - VITE_API_URL=http://localhost:8080/api
-      - VITE_WS_URL=ws://localhost:8080
+      PORT: "8080"
+      GIN_MODE: release
+      # The browser sees one origin: the app, /api and /ws all at PUBLIC_URL.
+      API_URL: ${PUBLIC_URL:-http://localhost}
+      FRONTEND_URL: ${PUBLIC_URL:-http://localhost}
+      DATABASE_URL: postgres://casino:${POSTGRES_PASSWORD}@postgres:5432/casino_db?sslmode=disable
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
+      JWT_EXPIRY: ${JWT_EXPIRY:-168h}
+      # Only Caddy can reach the backend (it isn't published), so the private
+      # Docker ranges are the proxy; Caddy sets X-Forwarded-For itself.
+      TRUSTED_PROXIES: 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      FACEBOOK_CLIENT_ID: ${FACEBOOK_CLIENT_ID:-}
+      FACEBOOK_CLIENT_SECRET: ${FACEBOOK_CLIENT_SECRET:-}
+      GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-}
+      GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-}
+    logging: *logging
+
+  web:
+    build: ./frontend
+    image: ${IMAGE_PREFIX:-casino}-web:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS:-:80}
+    ports:
+      - "${HTTP_PORT:-80}:80"
+      - "${HTTPS_PORT:-443}:443"
+      - "${HTTPS_PORT:-443}:443/udp" # HTTP/3
+    volumes:
+      # Certificates; keep them so restarts don't re-request from Let's Encrypt.
+      - caddy_data:/data
+      - caddy_config:/config
+    logging: *logging
 
 volumes:
   postgres_data:
+  caddy_data:
+  caddy_config:

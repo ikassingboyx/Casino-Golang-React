@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react'
+import { useMemo, useState } from 'react'
 import GameShell from '../components/common/GameShell'
 import ChipSelector from '../components/common/ChipSelector'
 import GameDock, { DockChips, DockStat } from '../components/common/GameDock'
@@ -8,23 +8,22 @@ import { TableSizeContext } from '../components/common/tableSize'
 import RouletteWheel from '../components/roulette/RouletteWheel'
 import BettingBoard from '../components/roulette/BettingBoard'
 import { useElementSize } from '../hooks/useElementSize'
-import { syncChips, useOfflineGame } from '../hooks/useOfflineGame'
+import { syncChips, useOfflineGame, type GameSession } from '../hooks/useOfflineGame'
+import { useOnlineGame } from '../hooks/useRoom'
 import { useAuthStore } from '../store/authStore'
+import { IN_NEXT_ROUND, WAITING_FOR_BETS, netResult } from '../utils/tableMessages'
 import { numberColor } from '../utils/roulette'
 import type { GameResponse } from '../api/game'
 import type { RouletteGameState } from '../types/roulette'
 
-interface Props { offline?: boolean }
+export default function RoulettePage() {
+  // The balance is revealed only after the ball lands, so chips are synced manually.
+  const session = useOfflineGame<RouletteGameState>('roulette', { autoSyncChips: false })
+  return <Roulette session={session} />
+}
 
-export default function RoulettePage({ offline = false }: Props) {
-  if (!offline) {
-    return (
-      <GameShell background="/assets/images/bg-roulette.svg">
-        <p className="text-ivory/60">Online roulette is coming soon.</p>
-      </GameShell>
-    )
-  }
-  return <OfflineRoulette />
+export function OnlineRoulette() {
+  return <Roulette session={useOnlineGame<RouletteGameState>()} />
 }
 
 // One click on the board: `amount` chips on `spot`. Kept in order for Undo.
@@ -40,9 +39,8 @@ function sumBySpot(placements: Placement[]) {
   return bets
 }
 
-function OfflineRoulette() {
-  // The balance is revealed only after the ball lands, so chips are synced manually.
-  const { game, busy, error, setError, start, act } = useOfflineGame<RouletteGameState>('roulette', { autoSyncChips: false })
+function Roulette({ session }: { session: GameSession<RouletteGameState> }) {
+  const { game, busy, error, setError, start, act, online } = session
   const [chip, setChip] = useState(25)
   const [placements, setPlacements] = useState<Placement[]>([])
   const [lastPlacements, setLastPlacements] = useState<Placement[]>([])
@@ -55,7 +53,7 @@ function OfflineRoulette() {
   const [message, setMessage] = useState('Pick a chip and place your bets')
   const [history, setHistory] = useState<number[]>([])
   const [net, setNet] = useState<number | null>(null) // your result of the last spin
-  const pending = useRef<GameResponse<RouletteGameState> | null>(null)
+  const [pending, setPending] = useState<GameResponse<RouletteGameState> | null>(null) // the spin on the wheel
   const user = useAuthStore(s => s.user)
   const [area, box] = useElementSize<HTMLDivElement>()
 
@@ -63,6 +61,22 @@ function OfflineRoulette() {
   const totalBet = placements.reduce((s, p) => s + p.amount, 0)
   const balance = shownBalance ?? game?.chips ?? 0
   const available = balance - totalBet
+  const meOnServer = game?.state.players.find(p => p.id === user?.id)
+  // Online: your bets are in and the others are still betting.
+  const placed = online && game?.state.phase === 'betting' && (meOnServer?.bets.length ?? 0) > 0
+  const canBet = !online || (game?.state.phase === 'betting' && !!meOnServer && !placed)
+
+  // A spin (yours, or online once the whole table has bet) sets the wheel going.
+  const st = game?.state
+  if (game && st?.phase === 'resolved' && st.winningNumber !== undefined && pending?.gameId !== game.gameId) {
+    setPending(game)
+    setWinning(null)
+    setMessage('No more bets…')
+    setSpinning(true)
+    setSpin(s => ({ winning: st.winningNumber!, id: (s?.id ?? 0) + 1 }))
+    // Chips you put out but never sent don't take part.
+    if (!st.players.find(p => p.id === user?.id)?.bets.length) setPlacements([])
+  }
 
   const place = (spot: string) => {
     if (chip > available) {
@@ -86,30 +100,26 @@ function OfflineRoulette() {
 
   const spinWheel = async () => {
     if (!game || totalBet === 0) return
+    // Keep showing the balance from before the bets until the ball lands.
     setShownBalance(balance)
-    // Each spin is its own round; a finished one can't take bets.
-    const current = game.state.phase === 'resolved' ? await start() : game
+    // Offline each spin is its own round; a finished one can't take bets.
+    const current = !online && game.state.phase === 'resolved' ? await start() : game
     if (!current) return
     const res = await act('spin', { bets: Object.entries(bets).map(([type, amount]) => ({ type, amount })) }, current.gameId)
-    if (!res || res.state.winningNumber === undefined) {
+    if (!res) {
       setShownBalance(null)
       return
     }
-
-    pending.current = res
     setLastPlacements(placements)
-    setWinning(null)
-    setMessage('No more bets…')
-    setSpinning(true)
-    setSpin({ winning: res.state.winningNumber, id: Date.now() })
   }
 
   const onSpinEnd = () => {
-    const res = pending.current
+    const res = pending
     if (!res || res.state.winningNumber === undefined) return
     const n = res.state.winningNumber
     const net = res.result?.amount ?? 0
     const color = numberColor(n)
+    const played = !!res.state.players.find(p => p.id === user?.id)?.bets.length
 
     setSpinning(false)
     setWinning(n)
@@ -118,14 +128,17 @@ function OfflineRoulette() {
     setShownBalance(null) // reveal: back to the game's (new) balance
     syncChips(res.chips)
     setPlacements([])
-    setMessage(
-      `${n} ${color[0].toUpperCase()}${color.slice(1)} · ` +
-        (net > 0 ? `You win +${net}` : net < 0 ? `You lose ${-net}` : 'You break even'),
-    )
+    const name = `${n} ${color[0].toUpperCase()}${color.slice(1)}`
+    setMessage(!played ? name : `${name} · ${netResult(net, 'You break even')}`)
   }
 
-  const locked = busy || spinning
+  const locked = busy || spinning || !canBet
   const result = winning !== null && placements.length === 0 && net !== null ? net : undefined
+  let shownMessage = error ?? message
+  if (!error && !spinning) {
+    if (placed) shownMessage = WAITING_FOR_BETS
+    else if (online && game && !meOnServer) shownMessage = IN_NEXT_ROUND
+  }
 
   // Fit the wheel and the board side by side (stacked on narrow screens),
   // leaving room under the board for the players' row.
@@ -157,7 +170,7 @@ function OfflineRoulette() {
           <button onClick={() => setPlacements(p => p.slice(0, -1))} disabled={locked || totalBet === 0} className="dock-btn">Undo</button>
           <button onClick={() => setPlacements([])} disabled={locked || totalBet === 0} className="dock-btn">Clear</button>
           <button onClick={rebet} disabled={locked || !(lastPlacements.length > 0 && placements.length === 0)} className="dock-btn">Rebet</button>
-          <button onClick={spinWheel} disabled={locked || totalBet === 0} className="dock-primary">Spin</button>
+          <button onClick={spinWheel} disabled={locked || totalBet === 0} className="dock-primary">{online ? 'Place bets' : 'Spin'}</button>
         </>
       }
     />
@@ -184,7 +197,7 @@ function OfflineRoulette() {
 
               <div className="flex flex-col items-center gap-3" style={{ width: boardW }}>
                 <div className="min-h-7 text-center text-lg font-bold text-ivory" aria-live="polite">
-                  {error ?? message}
+                  {shownMessage}
                 </div>
                 <BettingBoard bets={bets} onPlace={place} disabled={locked} winningNumber={winning} />
                 <TableSizeContext.Provider value={{ width: boardW, height: boardW / BOARD_ASPECT, u, portrait: stacked }}>

@@ -8,7 +8,7 @@ import { useTableSize } from '../common/tableSize'
 import CommunityCards from './CommunityCards'
 import PlayerHand from './PlayerHand'
 import PotDisplay from './PotDisplay'
-import { BOARD_Y, POT, seatSpots, type Point } from './layout'
+import { BOARD_Y, POT, openSeatSpots, seatSpots, type Point } from './layout'
 import type { Card } from '../../types/game'
 import type { PokerGameState } from '../../types/poker'
 import type { TableView } from '../../utils/poker'
@@ -39,6 +39,16 @@ interface Props {
   flights: Flight[]
   onFlightDone: (id: string) => void
   message?: string
+  seatControls?: SeatControls
+}
+
+// Online, for the host: seat bots in the empty places, or take them away.
+// Changes apply from the next hand.
+export interface SeatControls {
+  open: number // seats free at the table (bots waiting for the next hand count as taken)
+  onAddBot: () => void
+  botIds: string[] // bots that can be removed
+  onRemoveBot: (id: string) => void
 }
 
 const HIDDEN = { hidden: true } as Card
@@ -53,7 +63,7 @@ export default function PokerTable(props: Props) {
   )
 }
 
-function Felt({ state, view, roundId, myId, myAvatar, holeCardsDealt, reveal, thinkingId, yourTurn, myHandRank, winners = [], results, flights, onFlightDone, message }: Props) {
+function Felt({ state, view, roundId, myId, myAvatar, holeCardsDealt, reveal, thinkingId, yourTurn, myHandRank, winners = [], results, flights, onFlightDone, message, seatControls }: Props) {
   const { u, portrait } = useTableSize()
   const players = state?.players ?? []
   const n = players.length
@@ -131,6 +141,44 @@ function Felt({ state, view, roundId, myId, myAvatar, holeCardsDealt, reveal, th
       {flights.map(f => (
         <ChipFlight key={f.id} flight={f} from={where(f.from)} to={where(f.to)} onDone={() => onFlightDone(f.id)} />
       ))}
+
+      {seatControls && state && (
+        <>
+          {openSeatSpots(n, portrait).slice(0, seatControls.open).map((at, i) => (
+            <button
+              key={`open-${i}`}
+              onClick={seatControls.onAddBot}
+              title="Seat a bot from the next hand"
+              className="absolute flex items-center gap-1.5 whitespace-nowrap rounded-full border border-dashed border-ivory/30 bg-black/30 font-semibold text-ivory/60 transition hover:border-brass-light hover:bg-black/50 hover:text-brass-light focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brass-light"
+              style={{ left: `${at.x}%`, top: `${at.y}%`, transform: 'translate(-50%, -50%)', padding: `${u * 0.6}px ${u * 1.4}px`, fontSize: Math.max(11, u * 1.1) }}
+            >
+              <span aria-hidden>+</span> Add bot
+            </button>
+          ))}
+          {players.map((p, i) =>
+            seatControls.botIds.includes(p.id) ? (
+              <button
+                key={`remove-${p.id}`}
+                onClick={() => seatControls.onRemoveBot(p.id)}
+                aria-label={`Remove ${p.name}`}
+                title={`Remove ${p.name} after this hand`}
+                className="absolute flex items-center justify-center rounded-full bg-[#1a0806] text-ivory/60 shadow ring-1 ring-ivory/25 transition hover:text-ivory hover:ring-banco focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brass-light"
+                style={{
+                  left: `${spotsOf(i).plate.x}%`,
+                  top: `${spotsOf(i).plate.y}%`,
+                  width: Math.max(20, u * 2),
+                  height: Math.max(20, u * 2),
+                  transform: `translate(${u * 6}px, ${-u * 3.2}px)`,
+                }}
+              >
+                <svg viewBox="0 0 24 24" width="55%" height="55%" aria-hidden fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round">
+                  <path d="M6 6l12 12M18 6L6 18" />
+                </svg>
+              </button>
+            ) : null,
+          )}
+        </>
+      )}
     </>
   )
 }

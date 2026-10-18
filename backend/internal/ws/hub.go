@@ -1,103 +1,74 @@
 package ws
 
 import (
-	"encoding/json"
-	"log"
+	"context"
+	"database/sql"
+	"errors"
+	"fmt"
+	"math/rand"
+	"sync"
+
+	"casino/internal/bot"
+	"casino/internal/models"
 )
 
+// Hub holds the open online rooms, by code. Rooms live in memory; the rooms
+// table only records them (and anchors their games in the chip ledger).
 type Hub struct {
-	rooms      map[string]*Room
-	clients    map[*Client]bool
-	register   chan *Client
-	unregister chan *Client
+	db    *sql.DB
+	mu    sync.Mutex
+	rooms map[string]*Room
 }
 
-func NewHub() *Hub {
-	return &Hub{
-		rooms:      make(map[string]*Room),
-		clients:    make(map[*Client]bool),
-		register:   make(chan *Client, 16),
-		unregister: make(chan *Client, 16),
-	}
+func NewHub(db *sql.DB) *Hub {
+	return &Hub{db: db, rooms: make(map[string]*Room)}
 }
 
-func (h *Hub) Run() {
-	for {
-		select {
-		case client := <-h.register:
-			h.clients[client] = true
-			room := h.getOrCreateRoom(client.RoomID)
-			room.add(client)
-			log.Printf("client %s joined room %s", client.PlayerID, client.RoomID)
+var ErrUnknownGame = errors.New("unknown game")
 
-		case client := <-h.unregister:
-			if _, ok := h.clients[client]; ok {
-				delete(h.clients, client)
-				close(client.send)
-				if room, ok := h.rooms[client.RoomID]; ok {
-					room.remove(client)
-				}
-				log.Printf("client %s left room %s", client.PlayerID, client.RoomID)
-			}
-		}
-	}
-}
-
-func (h *Hub) getOrCreateRoom(roomID string) *Room {
-	if r, ok := h.rooms[roomID]; ok {
-		return r
-	}
-	r := newRoom(roomID)
-	h.rooms[roomID] = r
-	return r
-}
-
-func (h *Hub) handleMessage(c *Client, raw []byte) {
-	var msg Message
-	if err := json.Unmarshal(raw, &msg); err != nil {
-		log.Printf("ws parse error: %v", err)
-		return
-	}
-
-	room, ok := h.rooms[c.RoomID]
+// CreateRoom opens a room with a fresh 5-digit code. The host joins it by
+// connecting, like everyone else.
+func (h *Hub) CreateRoom(ctx context.Context, gameType, hostID string) (*Room, error) {
+	engine, ok := bot.NewEngine(gameType)
 	if !ok {
-		return
+		return nil, ErrUnknownGame
 	}
-
-	switch msg.Type {
-	case MsgPing:
-		data, _ := json.Marshal(Message{Type: MsgPong})
-		c.send <- data
-	case MsgStartGame, MsgPlayerAction, MsgPlaceBet, MsgLeaveRoom:
-		room.handleMessage(c, msg)
-	default:
-		log.Printf("unknown ws message type: %s", msg.Type)
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	for try := 0; try < 20; try++ {
+		code := fmt.Sprintf("%05d", 10000+rand.Intn(90000))
+		if _, taken := h.rooms[code]; taken {
+			continue
+		}
+		id, err := models.CreateRoom(ctx, h.db, code, gameType, hostID)
+		if errors.Is(err, models.ErrRoomCodeTaken) {
+			continue
+		}
+		if err != nil {
+			return nil, err
+		}
+		r := newRoom(h, id, code, gameType, hostID, engine)
+		h.rooms[code] = r
+		r.mu.Lock()
+		r.scheduleCleanup(abandonedRoomTTL)
+		r.mu.Unlock()
+		return r, nil
 	}
+	return nil, errors.New("no free room code, try again")
 }
 
-// Register adds a client to the hub.
-func (h *Hub) Register(c *Client) {
-	h.register <- c
+// Room returns the open room with this code.
+func (h *Hub) Room(code string) (*Room, bool) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	r, ok := h.rooms[code]
+	return r, ok
 }
 
-// BroadcastToRoom sends a message to all clients in a room.
-func (h *Hub) BroadcastToRoom(roomID string, msg Message) {
-	data, err := json.Marshal(msg)
-	if err != nil {
-		return
-	}
-	if room, ok := h.rooms[roomID]; ok {
-		room.broadcast(data)
-	}
-}
-
-// SendToPlayer sends a message to one specific player.
-func (h *Hub) SendToPlayer(roomID, playerID string, msg Message) {
-	data, err := json.Marshal(msg)
-	if err != nil {
-		return
-	}
-	if room, ok := h.rooms[roomID]; ok {
-		room.sendToPlayer(playerID, data)
+func (h *Hub) remove(r *Room) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.rooms[r.Code] == r {
+		delete(h.rooms, r.Code)
 	}
 }

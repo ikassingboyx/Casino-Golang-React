@@ -9,15 +9,24 @@ import (
 )
 
 type User struct {
-	ID               UUID       `json:"id" db:"id"`
-	Email            *string    `json:"email" db:"email"`
-	DisplayName      string     `json:"displayName" db:"display_name"`
-	AvatarURL        *string    `json:"avatarUrl" db:"avatar_url"`
-	Chips            int64      `json:"chips" db:"chips"`
-	LastDailyBonusAt *time.Time `json:"lastDailyBonusAt" db:"last_daily_bonus_at"`
-	CreatedAt        time.Time  `json:"createdAt" db:"created_at"`
-	UpdatedAt        time.Time  `json:"updatedAt" db:"updated_at"`
+	ID              UUID       `json:"id" db:"id"`
+	Email           *string    `json:"email" db:"email"`
+	DisplayName     string     `json:"displayName" db:"display_name"`
+	AvatarURL       *string    `json:"avatarUrl" db:"avatar_url"`
+	Chips           int64      `json:"chips" db:"chips"`
+	LastChipClaimAt *time.Time `json:"-" db:"last_chip_claim_at"`
+	// NextChipClaimAt is when the user may next claim chips; nil means now.
+	NextChipClaimAt *time.Time `json:"nextChipClaimAt"`
+	CreatedAt       time.Time  `json:"createdAt" db:"created_at"`
+	UpdatedAt       time.Time  `json:"updatedAt" db:"updated_at"`
 }
+
+// Chips a user can add to their balance from their profile, once per
+// ChipClaimInterval.
+const (
+	ChipClaimAmount   = 3000
+	ChipClaimInterval = time.Hour
+)
 
 type UUID = string
 
@@ -33,7 +42,7 @@ type OAuthProfile struct {
 
 var ErrUserNotFound = errors.New("user not found")
 
-const userColumns = `id, email, display_name, avatar_url, chips, last_daily_bonus_at, created_at, updated_at`
+const userColumns = `id, email, display_name, avatar_url, chips, last_chip_claim_at, created_at, updated_at`
 
 type rowQuerier interface {
 	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
@@ -42,7 +51,7 @@ type rowQuerier interface {
 func GetUserByID(ctx context.Context, db rowQuerier, id string) (*User, error) {
 	var u User
 	err := db.QueryRowContext(ctx, `SELECT `+userColumns+` FROM users WHERE id = $1`, id).Scan(
-		&u.ID, &u.Email, &u.DisplayName, &u.AvatarURL, &u.Chips, &u.LastDailyBonusAt, &u.CreatedAt, &u.UpdatedAt,
+		&u.ID, &u.Email, &u.DisplayName, &u.AvatarURL, &u.Chips, &u.LastChipClaimAt, &u.CreatedAt, &u.UpdatedAt,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrUserNotFound
@@ -50,7 +59,50 @@ func GetUserByID(ctx context.Context, db rowQuerier, id string) (*User, error) {
 	if err != nil {
 		return nil, err
 	}
+	if u.LastChipClaimAt != nil {
+		if next := u.LastChipClaimAt.Add(ChipClaimInterval); next.After(time.Now()) {
+			u.NextChipClaimAt = &next
+		}
+	}
 	return &u, nil
+}
+
+var ErrChipClaimTooSoon = errors.New("you can add more chips once the hour is up")
+
+// ClaimChips adds ChipClaimAmount to the user's balance if their last claim
+// was at least ChipClaimInterval ago, and records it in the chip ledger.
+func ClaimChips(ctx context.Context, db *sql.DB, userID string) (*User, error) {
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+
+	var balance int64
+	err = tx.QueryRowContext(ctx,
+		`UPDATE users SET chips = chips + $2, last_chip_claim_at = NOW(), updated_at = NOW()
+		 WHERE id = $1 AND (last_chip_claim_at IS NULL OR last_chip_claim_at <= NOW() - make_interval(secs => $3))
+		 RETURNING chips`,
+		userID, ChipClaimAmount, ChipClaimInterval.Seconds(),
+	).Scan(&balance)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrChipClaimTooSoon
+	}
+	if err != nil {
+		return nil, err
+	}
+	_, err = tx.ExecContext(ctx,
+		`INSERT INTO chip_transactions (user_id, amount, balance_after, description) VALUES ($1, $2, $3, 'chip_claim')`,
+		userID, ChipClaimAmount, balance,
+	)
+	if err != nil {
+		return nil, err
+	}
+	user, err := GetUserByID(ctx, tx, userID)
+	if err != nil {
+		return nil, err
+	}
+	return user, tx.Commit()
 }
 
 // FindOrCreateOAuthUser returns the user linked to this provider login. A

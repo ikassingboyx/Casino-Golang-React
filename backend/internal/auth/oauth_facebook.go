@@ -49,8 +49,9 @@ func fetchFacebookProfile(ctx context.Context, client *http.Client) (*models.OAu
 		Provider:   "facebook",
 		ProviderID: u.ID,
 		Email:      u.Email,
-		// Facebook only returns an email once the user has confirmed it.
-		EmailVerified: u.Email != "",
+		// Facebook gives no verified flag, so its email never links this
+		// login to an existing account (that would allow account takeover).
+		EmailVerified: false,
 		Name:          u.Name,
 		AvatarURL:     u.Picture.Data.URL,
 	}, nil

@@ -2,76 +2,82 @@
 
 ```
 Casino/
-├── frontend/                          # React app
+├── frontend/                          # React app (Vite + Tailwind)
+│   ├── index.html
 │   ├── public/
-│   │   ├── index.html
-│   │   └── assets/
-│   │       ├── images/
-│   │       │   ├── casino-interior.png    # Main lobby background
-│   │       │   ├── blackjack-table.png    # Game spot in lobby
-│   │       │   ├── poker-table.png
-│   │       │   ├── baccarat-table.png
-│   │       │   └── roulette-table.png
-│   │       ├── cards/                     # Card face SVGs (52 cards + back)
-│   │       └── chips/                     # Chip SVGs (different values)
+│   │   ├── favicon.svg
+│   │   └── assets/                        # Artwork (git-ignored; only READMEs tracked)
+│   │       ├── images/                    # Lobby room + stations, game backgrounds
+│   │       ├── cards/                     # Card faces (<suit>-<rank>.svg) + back.svg
+│   │       ├── chips/                     # Top-view chips (top-<value>.svg)
+│   │       └── roulette/                  # Wheel + betting board SVGs
+│   ├── scripts/
+│   │   └── casino_art.py                  # Generates the lobby/background SVGs
 │   │
 │   ├── src/
 │   │   ├── main.tsx                       # Entry point
 │   │   ├── App.tsx                        # Router setup
+│   │   ├── index.css                      # Tailwind + dock button styles
 │   │   │
 │   │   ├── api/
-│   │   │   ├── http.ts                    # Axios/fetch instance, base URL, interceptors
-│   │   │   ├── ws.ts                      # WebSocket client (connect, send, subscribe)
+│   │   │   ├── http.ts                    # Axios instance, base URL, auth + 401 interceptors
+│   │   │   ├── ws.ts                      # RoomConnection: joins a room over WS, reconnects, request/ack
 │   │   │   ├── auth.ts                    # OAuth login URLs, configured providers
-│   │   │   ├── rooms.ts                   # create room, join room, list rooms
-│   │   │   └── user.ts                    # get profile, get chips, update profile
+│   │   │   ├── game.ts                    # Offline game: start, action
+│   │   │   ├── rooms.ts                   # Create room (5-digit code), look up a code
+│   │   │   └── user.ts                    # Get profile, claim the hourly chips
 │   │   │
 │   │   ├── store/
 │   │   │   ├── authStore.ts               # Zustand - user session, token
-│   │   │   ├── gameStore.ts               # Zustand - current GameState object
-│   │   │   ├── lobbyStore.ts              # Zustand - room list, lobby state
-│   │   │   └── chipStore.ts               # Zustand - chip balance, transactions
+│   │   │   └── roomStore.ts               # Zustand - the online room + its current round
 │   │   │
 │   │   ├── hooks/
-│   │   │   ├── useWebSocket.ts            # Hook to manage WS connection lifecycle
-│   │   │   ├── useGameState.ts            # Hook to sync GameState from WS
-│   │   │   └── useAuth.ts                 # Hook for auth state + redirects
+│   │   │   ├── useRoom.ts                 # useRoom (join/leave a room), useOnlineGame (GameSession over WS)
+│   │   │   ├── useOfflineGame.ts          # GameSession over REST; pages play either kind
+│   │   │   ├── useCountdown.ts            # Seconds left until a deadline
+│   │   │   ├── useElementSize.ts          # Observed size of an element
+│   │   │   └── useAuth.ts                 # Auth state + logout
 │   │   │
 │   │   ├── pages/
 │   │   │   ├── LoginPage.tsx              # Google / Facebook / GitHub login
 │   │   │   ├── AuthCallbackPage.tsx       # Stores the JWT after social login
-│   │   │   ├── LobbyPage.tsx             # Casino interior with clickable game areas
-│   │   │   ├── GameSelectPage.tsx         # After clicking game: offline vs online choice
-│   │   │   ├── RoomPage.tsx               # Waiting room before game starts (online)
-│   │   │   ├── BlackjackPage.tsx          # Blackjack game view
-│   │   │   ├── PokerPage.tsx              # Poker game view
-│   │   │   ├── BaccaratPage.tsx           # Baccarat game view
-│   │   │   ├── RoulettePage.tsx           # Roulette game view
-│   │   │   └── ProfilePage.tsx            # User stats, chip balance
+│   │   │   ├── LobbyPage.tsx              # Casino interior with clickable game areas
+│   │   │   ├── RoomPage.tsx               # /room/:code: waiting room, then the online game
+│   │   │   ├── BlackjackPage.tsx          # Blackjack (offline + OnlineBlackjack)
+│   │   │   ├── PokerPage.tsx              # Poker (offline + OnlinePoker)
+│   │   │   ├── BaccaratPage.tsx           # Baccarat (offline + OnlineBaccarat)
+│   │   │   └── RoulettePage.tsx           # Roulette (offline + OnlineRoulette)
 │   │   │
 │   │   ├── components/
 │   │   │   ├── common/
-│   │   │   │   ├── Card.tsx               # Single card with flip animation
-│   │   │   │   ├── Chip.tsx               # Chip with value display
-│   │   │   │   ├── ChipStack.tsx          # Stack of chips (for bets)
+│   │   │   │   ├── UserBadge.tsx          # Avatar, name, chips; opens the profile
+│   │   │   │   ├── ProfileModal.tsx       # Balance, hourly +3000 chips, log out
+│   │   │   │   ├── Modal.tsx              # Generic modal
+│   │   │   │   ├── GameShell.tsx          # Game page frame: background, header, dock
+│   │   │   │   ├── GameDock.tsx           # Bottom bar: chips, bet, actions
+│   │   │   │   ├── TableStage.tsx         # Scales the table to the viewport
+│   │   │   │   ├── TableMessage.tsx       # Message printed on the felt
+│   │   │   │   ├── FeltPrint.tsx          # Lettering on the felt
+│   │   │   │   ├── Card.tsx / CardRow.tsx # Card with flip animation; a row of them
+│   │   │   │   ├── Chip.tsx / ChipPile.tsx# A chip; a pile for a bet amount
+│   │   │   │   ├── ChipSelector.tsx       # Chip buttons for betting
 │   │   │   │   ├── PlayerSeat.tsx         # Player avatar + name + chips at table
-│   │   │   │   ├── Timer.tsx              # Turn timer
-│   │   │   │   ├── Button.tsx             # Styled button
-│   │   │   │   └── Modal.tsx              # Generic modal
+│   │   │   │   ├── SeatRing.tsx / seats.ts# Seat layout around a table
+│   │   │   │   ├── Shoe.tsx / DiscardTray.tsx
+│   │   │   │   ├── DealProvider.tsx / dealing.ts # Dealing animation timing
+│   │   │   │   └── tableSize.ts           # Table size context
 │   │   │   │
 │   │   │   ├── lobby/
 │   │   │   │   ├── CasinoInterior.tsx     # The main illustrated casino view
 │   │   │   │   ├── GameSpot.tsx           # Clickable area on the casino image
-│   │   │   │   └── ModeSelect.tsx         # Offline vs Online modal
+│   │   │   │   └── ModeSelect.tsx         # Offline / online / join-by-code modal
 │   │   │   │
 │   │   │   ├── blackjack/
-│   │   │   │   ├── BlackjackTable.tsx     # Table layout
-│   │   │   │   ├── DealerHand.tsx         # Dealer's cards
-│   │   │   │   ├── PlayerHand.tsx         # Player's cards
-│   │   │   │   └── BlackjackControls.tsx  # Hit, Stand, Double, Split buttons
+│   │   │   │   └── BlackjackTable.tsx     # Table, dealer + player hands
 │   │   │   │
 │   │   │   ├── poker/
 │   │   │   │   ├── PokerTable.tsx         # Table with 5 seats
+│   │   │   │   ├── layout.ts              # Seat / chip positions
 │   │   │   │   ├── CommunityCards.tsx     # The 5 community cards
 │   │   │   │   ├── PlayerHand.tsx         # Player's 2 hole cards
 │   │   │   │   ├── PotDisplay.tsx         # Current pot amount
@@ -81,111 +87,98 @@ Casino/
 │   │   │   │   ├── BaccaratTable.tsx      # Table layout
 │   │   │   │   ├── BetAreas.tsx           # Player/Banker/Tie bet zones
 │   │   │   │   ├── HandDisplay.tsx        # Cards for player/banker
-│   │   │   │   └── BaccaratControls.tsx   # Place bet, deal
+│   │   │   │   └── BeadRoad.tsx           # Result history
 │   │   │   │
 │   │   │   ├── roulette/
 │   │   │   │   ├── RouletteWheel.tsx      # Spinning wheel animation
-│   │   │   │   ├── BettingBoard.tsx       # Inlined board SVG: click spots, chip piles, winning number
-│   │   │   │   └── RouletteControls.tsx   # Spin, clear bets
+│   │   │   │   └── BettingBoard.tsx       # Inlined board SVG: click spots, chip piles, winning number
 │   │   │   │
 │   │   │   └── auth/
 │   │   │       └── OAuthButtons.tsx       # Google / Facebook / GitHub buttons
 │   │   │
-│   │   ├── types/
-│   │   │   ├── game.ts                    # GameState, Player, Card, etc.
-│   │   │   ├── poker.ts                   # PokerGameState extends GameState
-│   │   │   ├── blackjack.ts              # BlackjackGameState
-│   │   │   ├── baccarat.ts              # BaccaratGameState
-│   │   │   ├── roulette.ts              # RouletteGameState
-│   │   │   ├── user.ts                   # User
-│   │   │   ├── room.ts                   # Room, RoomSettings
-│   │   │   └── ws.ts                     # WebSocket message types
+│   │   ├── types/                         # game, poker, blackjack, baccarat, roulette, user, room, ws
 │   │   │
 │   │   └── utils/
-│   │       ├── cardUtils.ts              # Card display helpers
-│   │       └── chipUtils.ts              # Chip formatting, denominations
+│   │       ├── cardUtils.ts               # Card labels + image paths
+│   │       ├── chipUtils.ts               # Chip formatting, denominations, breaking amounts into chips
+│   │       ├── tableMessages.ts           # Messages every game shows (waiting, result, out of chips)
+│   │       ├── games.ts                   # Game names
+│   │       ├── apiError.ts                # Readable API error messages
+│   │       ├── returnPath.ts              # Where to go after logging in
+│   │       ├── baccarat.ts / poker.ts / roulette.ts # Per-game display helpers
+│   │       └── roulettePhysics.ts         # Ball + wheel animation
 │   │
+│   ├── Dockerfile                     # Build the app, serve it with Caddy
+│   ├── Caddyfile                      # Static files, /api + /ws proxy, HTTPS, headers
 │   ├── package.json
-│   ├── tsconfig.json
+│   ├── tsconfig*.json
 │   ├── vite.config.ts
-│   └── tailwind.config.ts
+│   └── tailwind.config.js
 │
 ├── backend/                              # Go/Gin server
 │   ├── cmd/
 │   │   └── server/
-│   │       └── main.go                   # Entry point, starts Gin server
+│   │       └── main.go                   # Entry point: config, DB, migrations, HTTP server
 │   │
 │   ├── internal/
 │   │   ├── config/
-│   │   │   └── config.go                 # Env vars, DB URL, JWT secret, OAuth keys
+│   │   │   └── config.go                 # Env vars, DB URL, JWT secret, OAuth keys, trusted proxies
 │   │   │
 │   │   ├── models/
-│   │   │   ├── user.go                   # User struct + DB methods
-│   │   │   ├── room.go                   # Room struct
-│   │   │   ├── game_state.go             # Base GameState struct (JSON-serializable)
-│   │   │   ├── poker.go                  # PokerState embeds GameState
-│   │   │   ├── blackjack.go              # BlackjackState
-│   │   │   ├── baccarat.go               # BaccaratState
-│   │   │   ├── roulette.go               # RouletteState
-│   │   │   └── chip_transaction.go       # Chip ledger entries
+│   │   │   ├── user.go                   # User, OAuth login/linking, hourly chip claim
+│   │   │   ├── game.go                   # Stored games, chip ledger (ApplyChipChange)
+│   │   │   ├── room.go                   # Room, RoomPlayer, rooms table queries
+│   │   │   ├── game_state.go             # Player, BaseGameState, Action
+│   │   │   ├── poker.go / blackjack.go / baccarat.go / roulette.go  # Per-game state
 │   │   │
 │   │   ├── handlers/
-│   │   │   ├── auth.go                   # GET /auth/:provider, /auth/:provider/callback
-│   │   │   ├── user.go                   # GET /users/me, PATCH /users/me
-│   │   │   ├── room.go                   # POST /rooms, GET /rooms/:id, POST /rooms/:id/join
-│   │   │   └── ws.go                     # WebSocket upgrade handler
+│   │   │   ├── routes.go                 # All routes + rate limits, GET /api/health
+│   │   │   ├── auth.go                   # GET /auth/providers, /auth/:provider, /auth/:provider/callback
+│   │   │   ├── user.go                   # GET /users/me, POST /users/me/chips
+│   │   │   ├── game.go                   # POST /game/offline/start, /game/offline/action
+│   │   │   ├── room.go                   # POST /rooms, GET /rooms/:code
+│   │   │   └── ws.go                     # WebSocket upgrade (origin-checked)
 │   │   │
 │   │   ├── middleware/
-│   │   │   ├── auth.go                   # JWT validation middleware
-│   │   │   └── cors.go                   # CORS config
+│   │   │   ├── auth.go                   # JWT validation
+│   │   │   ├── cors.go                   # CORS config
+│   │   │   ├── logger.go                 # Request log without query strings (keeps tokens out)
+│   │   │   └── ratelimit.go              # Per-user / per-IP token bucket
 │   │   │
 │   │   ├── ws/
-│   │   │   ├── hub.go                    # WebSocket hub - manages all connections
+│   │   │   ├── hub.go                    # Open rooms by code; creates rooms
 │   │   │   ├── client.go                 # Single WS connection wrapper
-│   │   │   ├── room.go                   # Room-level message routing
+│   │   │   ├── room.go                   # Online table: seats (max 5), host, round loop, chips, timers
 │   │   │   └── messages.go               # WS message type definitions
 │   │   │
 │   │   ├── game/
-│   │   │   ├── engine.go                 # Interface: StartGame, HandleAction, GetState
-│   │   │   ├── poker.go                  # Poker game logic
-│   │   │   │                             #   - deal, bet rounds, showdown
-│   │   │   │                             #   - hand evaluation
-│   │   │   │                             #   - blind management
-│   │   │   ├── blackjack.go              # Blackjack game logic
-│   │   │   │                             #   - deal, hit, stand, double, split
-│   │   │   │                             #   - dealer AI (hit on soft 17)
-│   │   │   ├── baccarat.go               # Baccarat game logic
-│   │   │   │                             #   - punto banco rules
-│   │   │   │                             #   - third card rule
-│   │   │   ├── roulette.go               # Roulette game logic
-│   │   │   │                             #   - European single-zero
-│   │   │   │                             #   - bet types, payout calc
-│   │   │   ├── deck.go                   # Deck management (shuffle, draw)
+│   │   │   ├── engine.go                 # GameEngine interface + shared helpers
+│   │   │   ├── poker.go                  # Texas Hold'em: blinds, betting rounds, side pots, showdown
+│   │   │   ├── blackjack.go              # Blackjack: deal, hit, stand, double; dealer hits soft 17
+│   │   │   ├── baccarat.go               # Punto banco, third card rule
+│   │   │   ├── roulette.go               # European single-zero, bet types, payouts
+│   │   │   ├── deck.go                   # Deck / shoe (shuffle, draw)
 │   │   │   └── hand_eval.go              # Poker hand ranking evaluator
 │   │   │
 │   │   ├── bot/
-│   │   │   ├── bot.go                    # Bot interface
-│   │   │   ├── poker_bot.go              # Poker bot (user will implement)
-│   │   │   ├── blackjack_bot.go          # Blackjack bot
-│   │   │   └── roulette_bot.go           # Roulette bot
+│   │   │   ├── engine.go                 # NewEngine: game engine with bots attached
+│   │   │   └── poker_bot.go              # Equity-based poker bot (Monte Carlo)
 │   │   │
 │   │   ├── auth/
 │   │   │   ├── jwt.go                    # JWT token generation + validation
-│   │   │   ├── oauth_google.go           # Google OAuth2 flow
-│   │   │   └── oauth_facebook.go         # Facebook OAuth2 flow
+│   │   │   ├── oauth.go                  # Configured providers
+│   │   │   └── oauth_google.go / oauth_facebook.go / oauth_github.go
 │   │   │
 │   │   └── db/
-│   │       ├── postgres.go               # DB connection + migration runner
-│   │       └── migrations/
-│   │           ├── 001_create_users.sql
-│   │           ├── 002_create_rooms.sql
-│   │           ├── 003_create_games.sql
-│   │           └── 004_create_chip_transactions.sql
+│   │       ├── postgres.go               # DB connection + embedded migration runner
+│   │       └── migrations/               # 001–009 (*.up.sql / *.down.sql)
 │   │
+│   ├── Dockerfile                        # Static binary on Alpine, non-root
 │   ├── go.mod
 │   └── go.sum
 │
-├── docker-compose.yml                    # PostgreSQL + Redis + backend + frontend
+├── docker-compose.yml                    # postgres + backend + web (Caddy)
+├── DOCKER_SPEC.md                        # How to run with Docker and host it
 ├── .env.example                          # Template for env vars
 ├── .gitignore
 └── README.md
@@ -201,7 +194,7 @@ users (
     display_name    VARCHAR(50) NOT NULL,
     avatar_url      VARCHAR(500),
     chips           BIGINT DEFAULT 1000,   -- Starting chips
-    last_daily_bonus_at TIMESTAMPTZ,
+    last_chip_claim_at TIMESTAMPTZ,       -- last hourly +3000 chips claim
     created_at      TIMESTAMPTZ,
     updated_at      TIMESTAMPTZ
 )
@@ -219,7 +212,7 @@ user_identities (
 -- Rooms table
 rooms (
     id              UUID PRIMARY KEY,
-    code            VARCHAR(8) UNIQUE,     -- Short invite code
+    code            VARCHAR(8),            -- 5-digit invite code, unique among open rooms
     game_type       VARCHAR(20) NOT NULL,  -- 'poker', 'blackjack', 'baccarat', 'roulette'
     host_id         UUID REFERENCES users,
     status          VARCHAR(20),           -- 'waiting', 'playing', 'finished'
@@ -288,7 +281,7 @@ chip_transactions (
     ┌──────────────────────────────────────┐
     │  React App                           │
     │                                      │
-    │  GameState lives in Zustand store    │
+    │  GameState lives in the games table  │
     │  Bot logic runs in backend via REST  │
     │                                      │
     │  POST /api/game/offline/start        │
@@ -303,29 +296,37 @@ chip_transactions (
     ┌──────────────────────────────────────┐
     │  React App                           │
     │                                      │
-    │  1. POST /api/rooms                  │
-    │     → creates room, returns code     │
+    │  1. Lobby → pick a table → "Online"  │
+    │     POST /api/rooms { gameType }     │
+    │     → { code: "48213" }              │
     │                                      │
-    │  2. Friends open /join/:code         │
-    │     → POST /api/rooms/:code/join     │
+    │  2. Everyone opens /room/48213       │
+    │     (the invite link, or the code    │
+    │      typed into the lobby modal)     │
+    │     → WS /ws?token=…&code=48213      │
+    │       connecting = joining (max 5)   │
+    │     ← room_state to everyone         │
     │                                      │
-    │  3. Host clicks "Start"              │
-    │     → WS: { type: "start_game" }     │
+    │  3. Host clicks "Start game"         │
+    │     → { type: "start_game", id }     │
     │                                      │
-    │  4. Server creates GameState         │
-    │     → WS broadcast to all players:   │
-    │       { type: "game_state",          │
-    │         data: GameState }            │
-    │     (each player gets personalized   │
-    │      view - hidden cards filtered)   │
+    │  4. Server deals a round             │
+    │     ← game_state to each player      │
+    │       (their own view: hidden cards  │
+    │        filtered, their balance,      │
+    │        timeLeft on the clock)        │
     │                                      │
     │  5. Player acts                      │
-    │     → WS: { type: "action",          │
-    │             data: { action: "raise",  │
-    │                     amount: 500 } }  │
+    │     → { type: "player_action", id,   │
+    │         data: { action: "raise",     │
+    │                 amount: 500 } }      │
+    │     ← game_state to everyone, then   │
+    │       ack { id, error? } to sender   │
     │                                      │
-    │  6. Server validates, updates state  │
-    │     → WS broadcast: updated          │
-    │       GameState to all players       │
+    │  6. Bets wait for the whole table    │
+    │     (20s clock once someone bets);   │
+    │     turns time out after 30s.        │
+    │     Round over → chips settled →     │
+    │     next round dealt automatically.  │
     └──────────────────────────────────────┘
 ```

@@ -1,9 +1,10 @@
 package models
 
-// RouletteBet is one stake on the board. Type is the board spot, e.g.
+// Bet is one stake on a table spot. Roulette: Type is the board spot, e.g.
 // "straight-17", "split-1-2", "red", "dozen-2"; the server fills Numbers
-// from Type and never trusts numbers sent by the client.
-type RouletteBet struct {
+// from Type and never trusts numbers sent by the client. Baccarat: Type is
+// "player", "banker" or "tie".
+type Bet struct {
 	Type    string `json:"type"`
 	Numbers []int  `json:"numbers"`
 	Amount  int64  `json:"amount"`
@@ -12,7 +13,7 @@ type RouletteBet struct {
 
 type RoulettePlayer struct {
 	Player
-	Bets []RouletteBet `json:"bets"`
+	Bets []Bet `json:"bets"`
 }
 
 type RoulettePayout struct {

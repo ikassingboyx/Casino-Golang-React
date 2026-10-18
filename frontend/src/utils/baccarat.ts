@@ -2,7 +2,7 @@ import type { Card } from '../types/game'
 import type { BaccaratResult, BaccaratSpot } from '../types/baccarat'
 
 // Aces count 1, tens and faces 0, the rest their number.
-export function cardPoints(card: Card): number {
+function cardPoints(card: Card): number {
   if (card.rank === 'A') return 1
   if (card.rank === '10' || card.rank === 'J' || card.rank === 'Q' || card.rank === 'K') return 0
   return Number(card.rank)

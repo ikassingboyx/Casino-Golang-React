@@ -1,12 +1,21 @@
 package main
 
 import (
+	"context"
+	"errors"
+	"log"
+	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
+
 	"casino/internal/config"
 	"casino/internal/db"
 	"casino/internal/handlers"
 	"casino/internal/middleware"
+	"casino/internal/models"
 	"casino/internal/ws"
-	"log"
 
 	"github.com/gin-gonic/gin"
 )
@@ -27,16 +36,48 @@ func main() {
 		log.Fatalf("failed to run migrations: %v", err)
 	}
 
-	hub := ws.NewHub()
-	go hub.Run()
+	// Online rooms only live in memory, so none survive a restart.
+	if err := models.CloseOpenRooms(context.Background(), database); err != nil {
+		log.Fatalf("failed to close old rooms: %v", err)
+	}
+	hub := ws.NewHub(database)
 
-	r := gin.Default()
-	r.Use(middleware.CORS(cfg.FrontendURL))
+	r := gin.New()
+	if err := r.SetTrustedProxies(cfg.TrustedProxies); err != nil {
+		log.Fatalf("invalid TRUSTED_PROXIES: %v", err)
+	}
+	r.Use(middleware.Logger(), gin.Recovery(), middleware.CORS(cfg.FrontendURL))
 
 	handlers.RegisterRoutes(r, database, hub, cfg)
 
-	log.Printf("server starting on :%s", cfg.Port)
-	if err := r.Run(":" + cfg.Port); err != nil {
-		log.Fatalf("server error: %v", err)
+	// Timeouts keep slow or stalled clients from holding connections open.
+	// WebSocket connections are hijacked from the server, so they are not cut
+	// off by these; the room's ping/pong deadlines time them out instead.
+	srv := &http.Server{
+		Addr:              ":" + cfg.Port,
+		Handler:           r,
+		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       30 * time.Second,
+		WriteTimeout:      30 * time.Second,
+		IdleTimeout:       2 * time.Minute,
+		MaxHeaderBytes:    1 << 20,
+	}
+	go func() {
+		log.Printf("server starting on :%s", cfg.Port)
+		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			log.Fatalf("server error: %v", err)
+		}
+	}()
+
+	// docker stop (SIGTERM) or Ctrl-C: finish in-flight requests, then exit.
+	// Online rooms live in memory and end here; players rejoin new ones.
+	stop, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer cancel()
+	<-stop.Done()
+	log.Print("shutting down")
+	ctx, done := context.WithTimeout(context.Background(), 10*time.Second)
+	defer done()
+	if err := srv.Shutdown(ctx); err != nil {
+		log.Printf("shutdown: %v", err)
 	}
 }

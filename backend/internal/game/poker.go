@@ -2,7 +2,6 @@ package game
 
 import (
 	"casino/internal/models"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
@@ -18,8 +17,9 @@ import (
 // Actions: fold, check, call, raise (Amount = the total to raise the street
 // bet to, e.g. "raise to 300"), bet (alias of raise) and all_in.
 //
-// With a single human player (offline) four bots join the table and the
-// engine plays their turns, so every returned state waits on the human.
+// With a single human player (offline) four bots join the table. Bots can
+// also be passed in as players (IsBot). The engine plays every bot's turn, so
+// each returned state waits on a human.
 type PokerEngine struct {
 	// Bot decides for bot players. It receives the bot's own player view
 	// (*models.PokerGameState). Without one, bots check or call.
@@ -59,6 +59,12 @@ const (
 
 var botNames = []string{"Ace", "Duke", "Lucky", "Vegas"}
 
+// BotStack is the stack a bot sits down with at a table with this big blind.
+func BotStack(bigBlind int64) int64 { return botStackInBlinds * bigBlind }
+
+// DefaultBigBlind is the big blind unless a table sets its own.
+const DefaultBigBlind = defaultBigBlind
+
 // newPokerDeck is a variable so tests can stack the deck.
 var newPokerDeck = NewDeck
 
@@ -67,7 +73,9 @@ func (e *PokerEngine) StartGame(players []models.Player, settings map[string]any
 	if bb < 2 {
 		return nil, errors.New("big blind must be at least 2")
 	}
-	offline := len(players) == 1
+	// Offline a lone player gets four bots; online tables pass
+	// fillBots=false and seat the bots the host added themselves.
+	offline := len(players) == 1 && settings["fillBots"] != false
 	if offline {
 		if players[0].Chips < bb {
 			return nil, fmt.Errorf("you need at least %d chips to sit down", bb)
@@ -85,7 +93,7 @@ func (e *PokerEngine) StartGame(players []models.Player, settings map[string]any
 
 	state := &PokerState{
 		PokerGameState: models.PokerGameState{
-			BaseGameState:  models.BaseGameState{GameType: "poker", IsOffline: offline, Status: "playing"},
+			BaseGameState:  models.BaseGameState{GameType: "poker", Status: "playing"},
 			BigBlind:       bb,
 			SmallBlind:     bb / 2,
 			SidePots:       []models.SidePot{},
@@ -550,6 +558,31 @@ func (e *PokerEngine) runBots(s *PokerState) {
 	}
 }
 
+// Waiting: the turn of the player to act; the clock restarts after every action.
+func (e *PokerEngine) Waiting(raw any) (Waiting, bool) {
+	s := raw.(*PokerState)
+	if s.Status == "finished" || s.CurrentTurnIndex < 0 {
+		return Waiting{}, false
+	}
+	return Waiting{Key: fmt.Sprintf("turn:%d:%d", s.CurrentTurnIndex, len(s.Log))}, true
+}
+
+// Timeout checks for the player to act if that is free, otherwise folds them.
+func (e *PokerEngine) Timeout(raw any) (any, error) {
+	s := raw.(*PokerState)
+	if _, ok := e.Waiting(s); !ok {
+		return nil, errors.New("nothing to time out")
+	}
+	id := s.Players[s.CurrentTurnIndex].ID
+	if s.apply(id, models.Action{Type: "check"}) != nil {
+		if err := s.apply(id, models.Action{Type: "fold"}); err != nil {
+			return nil, err
+		}
+	}
+	e.runBots(s)
+	return s, nil
+}
+
 // GetStateForPlayer hides the deck and the other players' hole cards; hands
 // still in at showdown are revealed.
 func (e *PokerEngine) GetStateForPlayer(raw any, playerID string) any {
@@ -570,7 +603,7 @@ func (s *PokerState) view(playerID string) *models.PokerGameState {
 		}
 		v.Players[i] = p
 	}
-	if me := s.indexOf(playerID); me >= 0 && s.Status != "finished" && len(s.Players[me].Cards) == 2 {
+	if me := playerIndex(s.Players, playerID); me >= 0 && s.Status != "finished" && len(s.Players[me].Cards) == 2 {
 		cards := append(append([]models.Card{}, s.Players[me].Cards...), s.CommunityCards...)
 		v.Players[me].HandRank = EvaluateHand(cards).Rank.String()
 	}
@@ -579,15 +612,6 @@ func (s *PokerState) view(playerID string) *models.PokerGameState {
 		v.ValidActions = s.validActions(t)
 	}
 	return &v
-}
-
-func (s *PokerState) indexOf(playerID string) int {
-	for i, p := range s.Players {
-		if p.ID == playerID {
-			return i
-		}
-	}
-	return -1
 }
 
 func (s *PokerState) validActions(i int) []string {
@@ -609,21 +633,10 @@ func (s *PokerState) validActions(i int) []string {
 	return actions
 }
 
-func (e *PokerEngine) LoadState(data []byte) (any, error) {
-	var state PokerState
-	if err := json.Unmarshal(data, &state); err != nil {
-		return nil, err
-	}
-	return &state, nil
-}
+func (e *PokerEngine) LoadState(data []byte) (any, error) { return loadState[PokerState](data) }
 
 func (e *PokerEngine) PlayerChips(raw any, playerID string) int64 {
-	for _, p := range raw.(*PokerState).Players {
-		if p.ID == playerID {
-			return p.Chips
-		}
-	}
-	return 0
+	return playerChips(raw.(*PokerState).Players, playerID)
 }
 
 // settingInt reads a whole-number setting, which arrives as float64 from JSON.

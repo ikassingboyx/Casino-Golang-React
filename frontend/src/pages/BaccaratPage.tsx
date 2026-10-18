@@ -6,25 +6,29 @@ import { useDealing } from '../components/common/dealing'
 import BaccaratTable from '../components/baccarat/BaccaratTable'
 import GameDock, { DockChips, DockStat } from '../components/common/GameDock'
 import type { SettleStage } from '../components/baccarat/BetAreas'
-import { syncChips, useOfflineGame } from '../hooks/useOfflineGame'
+import { syncChips, useOfflineGame, type GameSession } from '../hooks/useOfflineGame'
+import { useOnlineGame } from '../hooks/useRoom'
 import { useAuthStore } from '../store/authStore'
+import { IN_NEXT_ROUND, OUT_OF_CHIPS, WAITING_FOR_BETS, netResult } from '../utils/tableMessages'
 import { RESULT_LABEL, handTotal, isNatural } from '../utils/baccarat'
 import type { GameResponse } from '../api/game'
 import type { BaccaratBets, BaccaratGameState, BaccaratResult, BaccaratSpot } from '../types/baccarat'
 
-interface Props { offline?: boolean }
-
-export default function BaccaratPage({ offline = false }: Props) {
-  if (!offline) {
-    return (
-      <GameShell background="/assets/images/bg-baccarat.svg">
-        <p className="text-ivory/60">Online baccarat is coming soon.</p>
-      </GameShell>
-    )
-  }
+export default function BaccaratPage() {
+  // The balance is revealed only once the chips are settled, so it is synced manually.
+  const session = useOfflineGame<BaccaratGameState>('baccarat', { autoSyncChips: false })
   return (
     <DealProvider>
-      <OfflineBaccarat />
+      <Baccarat session={session} />
+    </DealProvider>
+  )
+}
+
+export function OnlineBaccarat() {
+  const session = useOnlineGame<BaccaratGameState>()
+  return (
+    <DealProvider>
+      <Baccarat session={session} />
     </DealProvider>
   )
 }
@@ -50,9 +54,8 @@ function sumBySpot(placements: Placement[]): BaccaratBets {
   return bets
 }
 
-function OfflineBaccarat() {
-  // The balance is revealed only once the chips are settled, so it is synced manually.
-  const { game, busy, error, setError, start, act } = useOfflineGame<BaccaratGameState>('baccarat', { autoSyncChips: false })
+function Baccarat({ session }: { session: GameSession<BaccaratGameState> }) {
+  const { game, busy, error, setError, start, act, online } = session
   const dealing = useDealing()
   const user = useAuthStore(s => s.user)
   const [chip, setChip] = useState(25)
@@ -69,8 +72,22 @@ function OfflineBaccarat() {
   const totalBet = placements.reduce((s, p) => s + p.amount, 0)
   const balance = shownBalance ?? game?.chips ?? 0
   const available = balance - totalBet
-  const canBet = stage === 'betting' || stage === 'done'
+  const meOnServer = game?.state.players.find(p => p.id === user?.id)
+  const staked = (b?: BaccaratBets) => (b ? b.player + b.banker + b.tie : 0)
+  // Online: your bets are in and the others are still betting.
+  const placed = online && game?.state.phase === 'betting' && staked(meOnServer?.bets) > 0
+  const canBet = (stage === 'betting' || stage === 'done') && (!online || (game?.state.phase === 'betting' && !!meOnServer && !placed))
   const locked = busy || !canBet
+
+  // A dealt coup (from your deal, or online once the whole table has bet)
+  // goes on the table and is played out step by step.
+  if (game?.state.result && coup?.gameId !== game.gameId) {
+    setCoup(game)
+    setShown({ player: 2, banker: 2 })
+    setStage('dealing')
+    // Chips you put out but never sent don't take part.
+    if (staked(game.state.players.find(p => p.id === user?.id)?.bets) === 0) setPlacements([])
+  }
 
   const playerHand = coup?.state.playerHand
   const bankerHand = coup?.state.bankerHand
@@ -140,18 +157,16 @@ function OfflineBaccarat() {
 
   const deal = async () => {
     if (!game || totalBet === 0) return
+    // Keep showing the balance from before the bets until they are settled.
     setShownBalance(balance)
-    // Each coup is its own round; a finished one can't take bets.
-    const current = game.state.phase === 'resolved' ? await start() : game
+    // Offline each coup is its own round; a finished one can't take bets.
+    const current = !online && game.state.phase === 'resolved' ? await start() : game
     const res = current && (await act('deal', { bets: Object.entries(bets).filter(([, a]) => a > 0).map(([type, amount]) => ({ type, amount })) }, current.gameId))
-    if (!res?.state.result) {
+    if (!res) {
       setShownBalance(null)
       return
     }
     setLastPlacements(placements)
-    setCoup(res)
-    setShown({ player: 2, banker: 2 })
-    setStage('dealing')
   }
 
   let message = error ?? ''
@@ -162,7 +177,8 @@ function OfflineBaccarat() {
     if (decided) {
       message = result === 'tie' ? `Tie ${pt} – ${bt}` : `${RESULT_LABEL[result]} wins ${Math.max(pt, bt)} to ${Math.min(pt, bt)}`
       const net = coup.result?.amount ?? 0
-      if (stage !== 'reveal') message += ' · ' + (net > 0 ? `You win +${net}` : net < 0 ? `You lose ${-net}` : 'Bets returned')
+      const played = staked(coup.state.players.find(p => p.id === user?.id)?.bets) > 0
+      if (stage !== 'reveal' && played) message += ' · ' + netResult(net, 'Bets returned')
     } else if (dealing) {
       message = shown.banker > 2 ? 'Banker draws' : shown.player > 2 ? 'Player draws' : 'No more bets'
     } else if (shown.player < playerHand.cards.length) {
@@ -178,7 +194,9 @@ function OfflineBaccarat() {
     }
   }
   if (!message && !game) message = busy ? 'Opening the table…' : ''
-  if (!message && game && canBet) message = balance > 0 || totalBet > 0 ? 'Pick a chip and place your bets' : "You're out of chips."
+  if (!message && placed) message = WAITING_FOR_BETS
+  if (!message && online && game && !meOnServer) message = IN_NEXT_ROUND
+  if (!message && game && canBet) message = balance > 0 || totalBet > 0 ? 'Pick a chip and place your bets' : OUT_OF_CHIPS
 
   const stack = game ? Math.max(available, 0) : null
   const settled = stage === 'pay' || stage === 'collect' || (stage === 'done' && placements.length === 0)
@@ -197,7 +215,7 @@ function OfflineBaccarat() {
           <button onClick={() => setPlacements(p => p.slice(0, -1))} disabled={locked || totalBet === 0} className="dock-btn">Undo</button>
           <button onClick={() => setPlacements([])} disabled={locked || totalBet === 0} className="dock-btn">Clear</button>
           <button onClick={rebet} disabled={locked || !(lastPlacements.length > 0 && placements.length === 0)} className="dock-btn">Rebet</button>
-          <button onClick={deal} disabled={locked || totalBet === 0} className="dock-primary">Deal</button>
+          <button onClick={deal} disabled={locked || totalBet === 0} className="dock-primary">{online ? 'Place bets' : 'Deal'}</button>
         </>
       }
     />
@@ -212,7 +230,7 @@ function OfflineBaccarat() {
         result={decided ? coup?.state.result : undefined}
         settle={stage === 'reveal' || stage === 'pay' || stage === 'collect' ? stage : 'none'}
         bets={bets}
-        payouts={coup?.state.players[0]?.payouts}
+        payouts={coup?.state.players.find(p => p.id === user?.id)?.payouts}
         betsLocked={locked}
         onPlace={place}
         players={(coup ?? game)?.state.players ?? []}

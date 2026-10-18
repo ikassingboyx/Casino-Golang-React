@@ -5,12 +5,8 @@ export function cardLabel(card: Card): string {
   return `${card.rank}${suitSymbol(card.suit)}`
 }
 
-export function suitSymbol(suit: Card['suit']): string {
+function suitSymbol(suit: Card['suit']): string {
   return { hearts: '♥', diamonds: '♦', clubs: '♣', spades: '♠' }[suit]
-}
-
-export function isRed(card: Card): boolean {
-  return card.suit === 'hearts' || card.suit === 'diamonds'
 }
 
 // Image path for a card (public/assets/cards/<suit>-<rank>.svg); hidden cards show the back.

@@ -8,8 +8,8 @@ export interface Spot {
   ready: boolean
 }
 
-export const SPOT_W = 440
-export const SPOT_H = 560
+const SPOT_W = 440
+const SPOT_H = 560
 const CEILING = 140 // where the banner chains hang from
 const BANNER_Y = -52 // banner top, relative to the station (it hangs above the dealer)
 const BANNER_W = 300

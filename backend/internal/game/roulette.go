@@ -3,7 +3,6 @@ package game
 import (
 	"casino/internal/models"
 	"crypto/rand"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"math/big"
@@ -85,12 +84,6 @@ func buildRouletteBets() map[string][]int {
 	return bets
 }
 
-// RouletteBetNumbers returns the numbers a board spot covers.
-func RouletteBetNumbers(betType string) ([]int, bool) {
-	nums, ok := rouletteBets[betType]
-	return nums, ok
-}
-
 // rouletteMultiplier is what a winning bet returns per chip staked (stake
 // included): 36 / numbers covered, e.g. straight 36 (35:1), red 2 (1:1).
 func rouletteMultiplier(covered int) int64 { return int64(36 / covered) }
@@ -101,10 +94,10 @@ func (e *RouletteEngine) StartGame(players []models.Player, settings map[string]
 	}
 	rp := make([]models.RoulettePlayer, len(players))
 	for i, p := range players {
-		rp[i] = models.RoulettePlayer{Player: p, Bets: []models.RouletteBet{}}
+		rp[i] = models.RoulettePlayer{Player: p, Bets: []models.Bet{}}
 	}
 	return &RouletteState{models.RouletteGameState{
-		BaseGameState: models.BaseGameState{GameType: "roulette", Phase: "betting", IsOffline: true},
+		BaseGameState: models.BaseGameState{GameType: "roulette", Phase: "betting"},
 		Players:       rp,
 	}}, nil
 }
@@ -117,44 +110,94 @@ func (e *RouletteEngine) HandleAction(raw any, playerID string, action models.Ac
 	if action.Type != "spin" {
 		return nil, fmt.Errorf("unknown action: %s", action.Type)
 	}
-	pi := findRoulettePlayer(state, playerID)
+	pi := playerIndex(state.Players, playerID)
 	if pi < 0 {
 		return nil, errors.New("player not found")
+	}
+	p := &state.Players[pi]
+	if len(p.Bets) > 0 {
+		return nil, errors.New("you have already bet this spin")
 	}
 	bets, total, err := normalizeBets(action.Bets)
 	if err != nil {
 		return nil, err
 	}
-	p := &state.Players[pi]
 	if total > p.Chips {
 		return nil, errors.New("not enough chips for these bets")
 	}
-
-	winning, err := spinWheel()
-	if err != nil {
-		return nil, err
-	}
 	p.Chips -= total
-	var returned int64
-	for i := range bets {
-		if covers(bets[i].Numbers, winning) {
-			bets[i].Win = bets[i].Amount * rouletteMultiplier(len(bets[i].Numbers))
-			returned += bets[i].Win
-		}
-	}
-	p.Chips += returned
 	p.Bets = bets
 
+	// The wheel spins once the whole table has bet (online, Timeout spins
+	// with the bets placed when the clock runs out).
+	for _, other := range state.Players {
+		if len(other.Bets) == 0 {
+			return state, nil
+		}
+	}
+	if err := spinRoulette(state); err != nil {
+		return nil, err
+	}
+	return state, nil
+}
+
+// spinRoulette draws the winning number and pays every player's bets.
+func spinRoulette(state *RouletteState) error {
+	winning, err := spinWheel()
+	if err != nil {
+		return err
+	}
+	state.Payouts = []models.RoulettePayout{}
+	for i := range state.Players {
+		p := &state.Players[i]
+		if len(p.Bets) == 0 {
+			continue
+		}
+		var returned int64
+		for j := range p.Bets {
+			if covers(p.Bets[j].Numbers, winning) {
+				p.Bets[j].Win = p.Bets[j].Amount * rouletteMultiplier(len(p.Bets[j].Numbers))
+				returned += p.Bets[j].Win
+			}
+		}
+		p.Chips += returned
+		state.Payouts = append(state.Payouts, models.RoulettePayout{PlayerID: p.ID, Amount: returned})
+	}
 	state.WinningNumber = &winning
 	state.LastResult = &winning
-	state.Payouts = []models.RoulettePayout{{PlayerID: playerID, Amount: returned}}
 	state.Phase = "resolved"
+	return nil
+}
+
+// Waiting: once someone has bet, the rest of the table's bets.
+func (e *RouletteEngine) Waiting(raw any) (Waiting, bool) {
+	state := raw.(*RouletteState)
+	if state.Phase != "betting" {
+		return Waiting{}, false
+	}
+	for _, p := range state.Players {
+		if len(p.Bets) > 0 {
+			return Waiting{Key: "bets", Betting: true}, true
+		}
+	}
+	return Waiting{}, false
+}
+
+// Timeout spins with the bets placed so far.
+func (e *RouletteEngine) Timeout(raw any) (any, error) {
+	state := raw.(*RouletteState)
+	if _, ok := e.Waiting(state); !ok {
+		return nil, errors.New("nothing to time out")
+	}
+	if err := spinRoulette(state); err != nil {
+		return nil, err
+	}
 	return state, nil
 }
 
 // normalizeBets validates bet spots and amounts, merges repeated spots and
 // fills in each spot's numbers from the server's table.
-func normalizeBets(in []models.RouletteBet) ([]models.RouletteBet, int64, error) {
+func normalizeBets(in []models.Bet) ([]models.Bet, int64, error) {
 	if len(in) == 0 {
 		return nil, 0, errors.New("place at least one bet")
 	}
@@ -176,9 +219,9 @@ func normalizeBets(in []models.RouletteBet) ([]models.RouletteBet, int64, error)
 	if len(amounts) > maxRouletteBets {
 		return nil, 0, errors.New("too many bets")
 	}
-	bets := make([]models.RouletteBet, 0, len(amounts))
+	bets := make([]models.Bet, 0, len(amounts))
 	for t, a := range amounts {
-		bets = append(bets, models.RouletteBet{Type: t, Numbers: rouletteBets[t], Amount: a})
+		bets = append(bets, models.Bet{Type: t, Numbers: rouletteBets[t], Amount: a})
 	}
 	sort.Slice(bets, func(i, j int) bool { return bets[i].Type < bets[j].Type })
 	return bets, total, nil
@@ -201,15 +244,6 @@ func covers(nums []int, n int) bool {
 		}
 	}
 	return false
-}
-
-func findRoulettePlayer(state *RouletteState, id string) int {
-	for i, p := range state.Players {
-		if p.ID == id {
-			return i
-		}
-	}
-	return -1
 }
 
 func (e *RouletteEngine) GetStateForPlayer(raw any, playerID string) any {
@@ -238,18 +272,8 @@ func (e *RouletteEngine) ResolveRound(raw any) (any, []models.ChipChange, error)
 	return state, changes, nil
 }
 
-func (e *RouletteEngine) LoadState(data []byte) (any, error) {
-	var state RouletteState
-	if err := json.Unmarshal(data, &state); err != nil {
-		return nil, err
-	}
-	return &state, nil
-}
+func (e *RouletteEngine) LoadState(data []byte) (any, error) { return loadState[RouletteState](data) }
 
 func (e *RouletteEngine) PlayerChips(raw any, playerID string) int64 {
-	state := raw.(*RouletteState)
-	if i := findRoulettePlayer(state, playerID); i >= 0 {
-		return state.Players[i].Chips
-	}
-	return 0
+	return playerChips(raw.(*RouletteState).Players, playerID)
 }

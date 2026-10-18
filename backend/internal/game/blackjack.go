@@ -2,7 +2,6 @@ package game
 
 import (
 	"casino/internal/models"
-	"encoding/json"
 	"errors"
 	"fmt"
 )
@@ -47,51 +46,94 @@ func (e *BlackjackEngine) HandleAction(raw any, playerID string, action models.A
 	return state, fmt.Errorf("no action allowed in phase: %s", state.Phase)
 }
 
+// handleBet takes a player's bet. The cards are dealt once everyone at the
+// table has bet (straight away with a single player); online, Timeout deals
+// to whoever has bet when the betting clock runs out.
 func handleBet(state *BlackjackState, playerID string, action models.Action) (*BlackjackState, error) {
 	if action.Type != "bet" {
 		return nil, errors.New("expected a bet action")
 	}
-	pi := findPlayer(state, playerID)
+	pi := playerIndex(state.Players, playerID)
 	if pi < 0 {
 		return nil, errors.New("player not found")
 	}
 	p := &state.Players[pi]
+	if len(p.Hands) > 0 {
+		return nil, errors.New("you have already bet this round")
+	}
 	if action.Amount <= 0 || action.Amount > p.Chips {
 		return nil, errors.New("invalid bet amount")
 	}
 
 	p.Chips -= action.Amount
-	p.Hands = []models.BlackjackHand{{Bet: action.Amount, Status: "playing"}}
+	p.Hands = []models.BlackjackHand{{Cards: []models.Card{}, Bet: action.Amount, Status: "playing"}}
 
-	p.Hands[0].Cards = append(p.Hands[0].Cards, Draw(&state.Deck))
-	state.DealerHand.Cards = append(state.DealerHand.Cards, Draw(&state.Deck))
-	p.Hands[0].Cards = append(p.Hands[0].Cards, Draw(&state.Deck))
-	hole := Draw(&state.Deck)
-	hole.Hidden = true
-	state.DealerHand.Cards = append(state.DealerHand.Cards, hole)
-
-	playerBJ := isBlackjack(p.Hands[0].Cards)
-	if playerBJ {
-		p.Hands[0].Status = "blackjack"
-	}
-	// Dealer peeks for blackjack; a natural on either side ends the round.
-	if playerBJ || isBlackjack(state.DealerHand.Cards) {
-		if !playerBJ {
-			p.Hands[0].Status = "stand"
+	for _, other := range state.Players {
+		if len(other.Hands) == 0 {
+			return state, nil
 		}
-		runDealer(state)
-		state.Phase = "resolved"
-		return state, nil
 	}
-
-	state.Phase = "player_turns"
+	deal(state)
 	return state, nil
 }
 
+// deal gives two cards to every player who bet and to the dealer, in table
+// order, then hands the turn to the first player with a decision to make.
+func deal(state *BlackjackState) {
+	betting := []int{}
+	for i := range state.Players {
+		if len(state.Players[i].Hands) > 0 {
+			betting = append(betting, i)
+		}
+	}
+	for round := 0; round < 2; round++ {
+		for _, i := range betting {
+			h := &state.Players[i].Hands[0]
+			h.Cards = append(h.Cards, Draw(&state.Deck))
+		}
+		card := Draw(&state.Deck)
+		card.Hidden = round == 1 // the hole card
+		state.DealerHand.Cards = append(state.DealerHand.Cards, card)
+	}
+
+	for _, i := range betting {
+		if h := &state.Players[i].Hands[0]; isBlackjack(h.Cards) {
+			h.Status = "blackjack"
+		}
+	}
+	// Dealer peeks for blackjack; a dealer natural ends the round at once.
+	if isBlackjack(state.DealerHand.Cards) {
+		for _, i := range betting {
+			if h := &state.Players[i].Hands[0]; h.Status == "playing" {
+				h.Status = "stand"
+			}
+		}
+	}
+	state.CurrentPlayerIndex = -1
+	state.Phase = "player_turns"
+	nextTurn(state)
+}
+
+// nextTurn moves the turn to the next player whose hand is still playing.
+// When nobody is left the dealer plays and the round is over.
+func nextTurn(state *BlackjackState) {
+	for i := state.CurrentPlayerIndex + 1; i < len(state.Players); i++ {
+		if hands := state.Players[i].Hands; len(hands) > 0 && hands[0].Status == "playing" {
+			state.CurrentPlayerIndex = i
+			return
+		}
+	}
+	runDealer(state)
+	state.Phase = "resolved"
+}
+
 func handlePlayerAction(state *BlackjackState, playerID string, action models.Action) (*BlackjackState, error) {
-	pi := findPlayer(state, playerID)
+	pi := playerIndex(state.Players, playerID)
 	if pi < 0 {
 		return nil, errors.New("player not found")
+	}
+	if pi != state.CurrentPlayerIndex {
+		return nil, errors.New("it is not your turn")
 	}
 	p := &state.Players[pi]
 	hand := &p.Hands[0]
@@ -107,13 +149,12 @@ func handlePlayerAction(state *BlackjackState, playerID string, action models.Ac
 		default:
 			return state, nil
 		}
-		runDealer(state)
-		state.Phase = "resolved"
 	case "stand":
 		hand.Status = "stand"
-		runDealer(state)
-		state.Phase = "resolved"
 	case "double":
+		if len(hand.Cards) != 2 {
+			return nil, errors.New("you can only double on your first two cards")
+		}
 		if p.Chips < hand.Bet {
 			return nil, errors.New("not enough chips to double")
 		}
@@ -125,11 +166,42 @@ func handlePlayerAction(state *BlackjackState, playerID string, action models.Ac
 		} else {
 			hand.Status = "stand"
 		}
-		runDealer(state)
-		state.Phase = "resolved"
 	default:
 		return nil, fmt.Errorf("unknown action: %s", action.Type)
 	}
+	nextTurn(state)
+	return state, nil
+}
+
+// Waiting: the rest of the bets once someone has bet, then each player's turn.
+func (e *BlackjackEngine) Waiting(raw any) (Waiting, bool) {
+	state := raw.(*BlackjackState)
+	switch state.Phase {
+	case "betting":
+		for _, p := range state.Players {
+			if len(p.Hands) > 0 {
+				return Waiting{Key: "bets", Betting: true}, true
+			}
+		}
+	case "player_turns":
+		hand := state.Players[state.CurrentPlayerIndex].Hands[0]
+		return Waiting{Key: fmt.Sprintf("turn:%d:%d", state.CurrentPlayerIndex, len(hand.Cards))}, true
+	}
+	return Waiting{}, false
+}
+
+// Timeout deals to the players who have bet, or stands the player to act.
+func (e *BlackjackEngine) Timeout(raw any) (any, error) {
+	state := raw.(*BlackjackState)
+	if _, ok := e.Waiting(state); !ok {
+		return nil, errors.New("nothing to time out")
+	}
+	if state.Phase == "betting" {
+		deal(state)
+		return state, nil
+	}
+	state.Players[state.CurrentPlayerIndex].Hands[0].Status = "stand"
+	nextTurn(state)
 	return state, nil
 }
 
@@ -209,20 +281,10 @@ func (e *BlackjackEngine) GetStateForPlayer(raw any, playerID string) any {
 	return &view
 }
 
-func (e *BlackjackEngine) LoadState(data []byte) (any, error) {
-	var state BlackjackState
-	if err := json.Unmarshal(data, &state); err != nil {
-		return nil, err
-	}
-	return &state, nil
-}
+func (e *BlackjackEngine) LoadState(data []byte) (any, error) { return loadState[BlackjackState](data) }
 
 func (e *BlackjackEngine) PlayerChips(raw any, playerID string) int64 {
-	state := raw.(*BlackjackState)
-	if i := findPlayer(state, playerID); i >= 0 {
-		return state.Players[i].Chips
-	}
-	return 0
+	return playerChips(raw.(*BlackjackState).Players, playerID)
 }
 
 func (e *BlackjackEngine) IsRoundOver(raw any) bool {
@@ -242,6 +304,9 @@ func (e *BlackjackEngine) ResolveRound(raw any) (any, []models.ChipChange, error
 
 	for i := range state.Players {
 		p := &state.Players[i]
+		if len(p.Hands) == 0 {
+			continue // sat this round out
+		}
 		hand := &p.Hands[0]
 		var payout int64
 
@@ -269,15 +334,6 @@ func (e *BlackjackEngine) ResolveRound(raw any) (any, []models.ChipChange, error
 		changes = append(changes, models.ChipChange{PlayerID: p.ID, Amount: payout - hand.Bet})
 	}
 	return state, changes, nil
-}
-
-func findPlayer(state *BlackjackState, id string) int {
-	for i, p := range state.Players {
-		if p.ID == id {
-			return i
-		}
-	}
-	return -1
 }
 
 func isBlackjack(cards []models.Card) bool {

@@ -17,9 +17,22 @@ export function syncChips(chips: number) {
   if (user) setUser({ ...user, chips })
 }
 
+// What a game page plays through: an offline game (this hook) or a round at
+// an online table (useOnlineGame). `start` deals a new offline round; online
+// the server deals every round, so it just returns the current one.
+export interface GameSession<State> {
+  game: GameResponse<State> | null
+  busy: boolean
+  error: string | null
+  setError: (error: string | null) => void
+  start: () => Promise<GameResponse<State> | null>
+  act: (action: string, payload?: ActionPayload, gameId?: string) => Promise<GameResponse<State> | null>
+  online: boolean
+}
+
 // Drives an offline game of any type: starts (or resumes) a round on mount,
 // sends actions, and keeps the user's chip balance in sync.
-export function useOfflineGame<State>(gameType: GameType, { autoSyncChips = true }: Options = {}) {
+export function useOfflineGame<State>(gameType: GameType, { autoSyncChips = true }: Options = {}): GameSession<State> {
   const [game, setGame] = useState<GameResponse<State> | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -57,5 +70,5 @@ export function useOfflineGame<State>(gameType: GameType, { autoSyncChips = true
     start()
   }, [start])
 
-  return { game, busy, error, setError, start, act }
+  return { game, busy, error, setError, start, act, online: false }
 }

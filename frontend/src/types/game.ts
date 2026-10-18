@@ -27,7 +27,6 @@ export interface BaseGameState {
   roomId?: string
   gameType: GameType
   phase: string
-  isOffline: boolean
   status: string // e.g. 'playing', 'finished' (poker)
   lastAction?: LastAction
 }

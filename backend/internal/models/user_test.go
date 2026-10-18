@@ -78,3 +78,38 @@ func TestFindOrCreateOAuthUser(t *testing.T) {
 		t.Fatalf("unverified email handled wrong: %+v", other)
 	}
 }
+
+func TestClaimChips(t *testing.T) {
+	db := testDB(t)
+	ctx := context.Background()
+	u, err := FindOrCreateOAuthUser(ctx, db, &OAuthProfile{Provider: "google", ProviderID: randomID(t), Name: "Cal"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	deleteUser(t, db, u.ID)
+	if u.NextChipClaimAt != nil {
+		t.Fatalf("new user should be able to claim now, next at %v", u.NextChipClaimAt)
+	}
+
+	claimed, err := ClaimChips(ctx, db, u.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if claimed.Chips != u.Chips+ChipClaimAmount || claimed.NextChipClaimAt == nil {
+		t.Fatalf("after claim: chips %d next %v, want %d and a next claim time", claimed.Chips, claimed.NextChipClaimAt, u.Chips+ChipClaimAmount)
+	}
+
+	// A second claim within the hour is refused and adds nothing.
+	if _, err := ClaimChips(ctx, db, u.ID); err != ErrChipClaimTooSoon {
+		t.Fatalf("second claim: err %v, want ErrChipClaimTooSoon", err)
+	}
+
+	// Once the hour has passed it works again.
+	if _, err := db.Exec(`UPDATE users SET last_chip_claim_at = NOW() - INTERVAL '61 minutes' WHERE id = $1`, u.ID); err != nil {
+		t.Fatal(err)
+	}
+	again, err := ClaimChips(ctx, db, u.ID)
+	if err != nil || again.Chips != u.Chips+2*ChipClaimAmount {
+		t.Fatalf("claim after the hour: %+v err %v", again, err)
+	}
+}

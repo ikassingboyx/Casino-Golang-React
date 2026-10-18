@@ -274,8 +274,8 @@ func TestOfflineAddsBotsAndWaitsForHuman(t *testing.T) {
 			t.Fatal(err)
 		}
 		s := raw.(*PokerState)
-		if len(s.Players) != 5 || !s.IsOffline {
-			t.Fatalf("want 5 players offline, got %d", len(s.Players))
+		if len(s.Players) != 5 {
+			t.Fatalf("want 5 players (you and 4 bots), got %d", len(s.Players))
 		}
 		for s.Status != "finished" {
 			if turn(s) != "me" {

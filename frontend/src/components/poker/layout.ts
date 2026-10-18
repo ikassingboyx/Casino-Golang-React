@@ -46,5 +46,13 @@ export function seatSpots(offset: number, players: number, portrait: boolean): S
   }
 }
 
+// Where the empty places are with `players` seated: the nameplate spots of
+// the five places the table isn't using, going clockwise from you.
+export function openSeatSpots(players: number, portrait: boolean): Point[] {
+  const used = SLOTS[Math.min(Math.max(players, 1), 5)]
+  const angles = SLOT_ANGLES[portrait ? 'portrait' : 'landscape']
+  return angles.filter((_, i) => !used.includes(i)).map(deg => onOval(deg, portrait ? 0.88 : 0.84))
+}
+
 export const POT: Point = { x: 50, y: 29 }
 export const BOARD_Y = 47 // centre of the community cards

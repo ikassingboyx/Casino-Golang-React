@@ -4,7 +4,7 @@ import { POCKET_STEP, WHEEL_ORDER } from './roulette'
 // exactly in the winning pocket. Angles: degrees clockwise from 12 o'clock.
 // Radii in the 600px wheel canvas (track ≈243, pocket ≈168).
 
-export const TRACK_R = 243
+const TRACK_R = 243
 export const POCKET_R = 168
 
 export interface SpinPlan {

@@ -1,6 +1,7 @@
 package ws
 
 import (
+	"encoding/json"
 	"log"
 	"time"
 
@@ -11,30 +12,61 @@ const (
 	writeWait      = 10 * time.Second
 	pongWait       = 60 * time.Second
 	pingPeriod     = (pongWait * 9) / 10
-	maxMessageSize = 4096
+	maxMessageSize = 16 * 1024 // a roulette spin can carry a bet on every spot
 )
 
+// Client is one WebSocket connection of a player to a room. A player may
+// have several (e.g. two tabs); they all get the same updates.
 type Client struct {
-	hub      *Hub
 	conn     *websocket.Conn
 	send     chan []byte
+	closed   bool // send is closed; guarded by the room's lock
 	PlayerID string
-	RoomID   string
+	room     *Room
 }
 
-func NewClient(hub *Hub, conn *websocket.Conn, playerID, roomID string) *Client {
-	return &Client{
-		hub:      hub,
-		conn:     conn,
-		send:     make(chan []byte, 256),
-		PlayerID: playerID,
-		RoomID:   roomID,
+func NewClient(conn *websocket.Conn, playerID string) *Client {
+	return &Client{conn: conn, send: make(chan []byte, 256), PlayerID: playerID}
+}
+
+// Reject tells a client why it can't join and closes the connection.
+func Reject(conn *websocket.Conn, reason string) {
+	conn.SetWriteDeadline(time.Now().Add(writeWait))
+	conn.WriteMessage(websocket.TextMessage, encode(MsgError, ErrorInfo{Message: reason, Fatal: true}))
+	conn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
+	conn.Close()
+}
+
+// Run pumps messages both ways until the connection closes.
+func (c *Client) Run() {
+	go c.writePump()
+	c.readPump()
+}
+
+// shutdown closes the send channel, once, which ends writePump and the
+// connection; the caller holds the room's lock.
+func (c *Client) shutdown() {
+	if !c.closed {
+		c.closed = true
+		close(c.send)
 	}
 }
 
-func (c *Client) ReadPump() {
+// queue sends without blocking; the caller holds the room's lock.
+func (c *Client) queue(data []byte) {
+	if c.closed {
+		return
+	}
+	select {
+	case c.send <- data:
+	default:
+		log.Printf("ws send buffer full for player %s", c.PlayerID)
+	}
+}
+
+func (c *Client) readPump() {
 	defer func() {
-		c.hub.unregister <- c
+		c.room.disconnect(c)
 		c.conn.Close()
 	}()
 	c.conn.SetReadLimit(maxMessageSize)
@@ -44,18 +76,23 @@ func (c *Client) ReadPump() {
 		return nil
 	})
 	for {
-		_, msg, err := c.conn.ReadMessage()
+		_, raw, err := c.conn.ReadMessage()
 		if err != nil {
-			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
+			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure, websocket.CloseNormalClosure, websocket.CloseNoStatusReceived) {
 				log.Printf("ws read error: %v", err)
 			}
-			break
+			return
 		}
-		c.hub.handleMessage(c, msg)
+		var msg Message
+		if err := json.Unmarshal(raw, &msg); err != nil {
+			log.Printf("ws parse error: %v", err)
+			continue
+		}
+		c.room.handleMessage(c, msg)
 	}
 }
 
-func (c *Client) WritePump() {
+func (c *Client) writePump() {
 	ticker := time.NewTicker(pingPeriod)
 	defer func() {
 		ticker.Stop()

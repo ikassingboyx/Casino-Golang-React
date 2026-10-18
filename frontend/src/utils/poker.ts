@@ -57,7 +57,7 @@ export function replay(state: PokerGameState, upto: number): TableView {
 }
 
 // Short label for a seat: "Raise to 600", "Check".
-export function actionLabel(e: PokerEvent, betBefore: number): string {
+function actionLabel(e: PokerEvent, betBefore: number): string {
   const n = e.bet.toLocaleString()
   switch (e.action) {
     case 'small_blind':

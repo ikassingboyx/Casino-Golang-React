@@ -4,5 +4,5 @@ export interface User {
   displayName: string
   avatarUrl: string | null
   chips: number
-  lastDailyBonusAt?: string
+  nextChipClaimAt: string | null // when chips can next be added; null means now
 }

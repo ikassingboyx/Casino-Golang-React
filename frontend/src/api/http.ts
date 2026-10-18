@@ -1,7 +1,9 @@
 import axios from 'axios'
 import { useAuthStore } from '../store/authStore'
 
-export const API_URL: string = import.meta.env.VITE_API_URL ?? 'http://localhost:8080/api'
+// The API is served from the same origin as the app (Caddy in Docker, Vite's
+// proxy in development); VITE_API_URL points it elsewhere.
+export const API_URL: string = import.meta.env.VITE_API_URL ?? '/api'
 
 const http = axios.create({ baseURL: API_URL })
 

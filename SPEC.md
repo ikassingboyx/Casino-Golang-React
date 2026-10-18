@@ -62,20 +62,20 @@ Each user has:
 - `display_name` — shown at the table
 - `avatar_url` — optional profile picture (from OAuth or upload)
 - `chips` — current chip balance (integer, never goes negative)
-- `last_daily_bonus_at` — timestamp of last bonus claim
+- `last_chip_claim_at` — when the user last added chips from their profile
 
 ### 3.3 Chip System
 
 - Starting chips: **1000**
-- Daily bonus: **500 chips**, claimable once every 24 hours
-- If balance hits 0, a banner appears offering the daily bonus or telling them to come back tomorrow
+- Chip top-up: **3000 chips**, claimable once per hour by clicking your profile (the badge in the lobby) → "Add 3,000 chips". Until the hour is up the button shows a countdown. (`POST /api/users/me/chips`; 429 if claimed too soon)
+- If balance hits 0, the table says so and points to the profile top-up
 - Enable transfer between players, no limits on bets (minimum 1 chip)
 - Every chip movement is recorded in `chip_transactions` table (ledger)
 
 Chip transaction examples:
 - Win poker hand → `+1400` chips
 - Lose blackjack bet of 200 → `-200` chips
-- Daily bonus → `+500` chips, description: `"daily_bonus"`
+- Chip top-up → `+3000` chips, description: `"chip_claim"`
 
 ---
 
@@ -626,15 +626,7 @@ Offline replaces the 30s timer with a manual "Spin" button.
 }
 ```
 
-**`chipStore`**
-```ts
-{
-  balance: number,
-  canClaimDaily: boolean,
-  setBalance(n): void,
-  claimDaily(): Promise<void>
-}
-```
+The chip balance lives on `authStore.user.chips`, with `user.nextChipClaimAt` for the hourly top-up.
 
 ### 8.3 WebSocket Hook (`useWebSocket.ts`)
 
@@ -704,10 +696,9 @@ App
 │   │   └── BetPlacer           ← click to place chip
 │   ├── TimerBar                ← 30s countdown
 │   └── RouletteControls        ← spin (offline) / clear bets
-└── ProfilePage
+└── ProfileModal               ← opened from UserBadge in the lobby
     ├── ChipBalance
-    ├── DailyBonusButton
-    └── TransactionHistory
+    └── AddChipsButton          ← +3000 once an hour, countdown until then
 ```
 
 ---
@@ -737,8 +728,7 @@ GET    /api/auth/:provider/callback   → handle code, redirect to
 **Users** (JWT required)
 ```
 GET    /api/users/me                → current user profile + chip balance
-PATCH  /api/users/me                { displayName?, avatarUrl? }
-POST   /api/users/me/daily-bonus    → claim daily 500 chips (400 if already claimed today)
+POST   /api/users/me/chips          → add 3000 chips, once per hour (429 if claimed too soon)
 ```
 
 **Rooms** (JWT required)
@@ -863,7 +853,7 @@ CREATE TABLE users (
     display_name    VARCHAR(50) NOT NULL,
     avatar_url      VARCHAR(500),
     chips           BIGINT NOT NULL DEFAULT 1000,
-    last_daily_bonus_at TIMESTAMPTZ,
+    last_chip_claim_at TIMESTAMPTZ,
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -1036,7 +1026,7 @@ This is the recommended implementation sequence, from simplest to most complex:
 ### Phase 6 — Auth & Profile
 31. Google OAuth flow
 32. Facebook OAuth flow
-33. Profile page: chip balance, daily bonus button, transaction history
+33. Profile modal: chip balance, hourly +3000 chips button
 
 ### Phase 7 — Polish
 34. Disconnect handling (auto-fold logic)

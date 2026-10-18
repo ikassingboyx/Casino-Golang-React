@@ -1,8 +1,8 @@
 import { useLayoutEffect, useRef } from 'react'
 import GameSpot, { type Spot } from './GameSpot'
 
-export const SCENE_W = 1920
-export const SCENE_H = 1080
+const SCENE_W = 1920
+const SCENE_H = 1080
 
 interface Props {
   spots: Spot[]

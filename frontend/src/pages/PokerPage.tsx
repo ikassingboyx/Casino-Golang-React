@@ -3,27 +3,48 @@ import GameShell from '../components/common/GameShell'
 import DealProvider from '../components/common/DealProvider'
 import { useDealing } from '../components/common/dealing'
 import PokerControls from '../components/poker/PokerControls'
-import PokerTable, { type Flight } from '../components/poker/PokerTable'
-import { syncChips, useOfflineGame } from '../hooks/useOfflineGame'
+import PokerTable, { type Flight, type SeatControls } from '../components/poker/PokerTable'
+import { syncChips, useOfflineGame, type GameSession } from '../hooks/useOfflineGame'
+import { addBot, removeBot, useOnlineGame } from '../hooks/useRoom'
+import { useRoomStore } from '../store/roomStore'
 import { useAuthStore } from '../store/authStore'
 import { describeEvent, replay, withHand } from '../utils/poker'
 import type { PokerAction, PokerEvent, PokerGameState } from '../types/poker'
 
-interface Props { offline?: boolean }
-
 const BACKGROUND = '/assets/images/bg-poker.svg'
 
-export default function PokerPage({ offline = false }: Props) {
-  if (!offline) {
-    return (
-      <GameShell background={BACKGROUND}>
-        <p className="text-ivory/60">Online poker is coming soon.</p>
-      </GameShell>
-    )
-  }
+export default function PokerPage() {
+  // The balance in the header is synced once a hand is paid out.
+  const session = useOfflineGame<PokerGameState>('poker', { autoSyncChips: false })
   return (
     <DealProvider>
-      <OfflinePoker />
+      <Poker session={session} />
+    </DealProvider>
+  )
+}
+
+export function OnlinePoker() {
+  const session = useOnlineGame<PokerGameState>()
+  const room = useRoomStore(s => s.room)
+  const userId = useAuthStore(s => s.user?.id)
+  const [notice, setNotice] = useState<string | null>(null)
+  const clearNotice = useCallback(() => setNotice(null), [])
+
+  // The host seats and removes bots; changes apply from the next hand.
+  const report = async (request: Promise<string | null>, done: string) => setNotice((await request) ?? done)
+  const seatControls: SeatControls | undefined =
+    room && room.hostId === userId
+      ? {
+          open: room.maxPlayers - room.players.length,
+          onAddBot: () => report(addBot(), 'A bot joins from the next hand'),
+          botIds: room.players.filter(p => p.isBot).map(p => p.userId),
+          onRemoveBot: id => report(removeBot(id), 'The bot leaves after this hand'),
+        }
+      : undefined
+
+  return (
+    <DealProvider>
+      <Poker session={session} seatControls={seatControls} notice={notice} onNoticeShown={clearNotice} />
     </DealProvider>
   )
 }
@@ -47,10 +68,17 @@ const STREETS = new Set<PokerEvent['action']>(['flop', 'turn', 'river'])
 
 // Each server response holds the whole hand so far (state.log); the table
 // replays the new steps one at a time, so the bots' turns and the streets
-// they lead to are seen as they happen rather than all at once.
-function OfflinePoker() {
-  // The balance in the header is synced once a hand is paid out.
-  const { game, busy, error, start, act } = useOfflineGame<PokerGameState>('poker', { autoSyncChips: false })
+// they lead to are seen as they happen rather than all at once. Online the
+// server deals each hand; offline you deal the next one.
+interface PokerProps {
+  session: GameSession<PokerGameState>
+  seatControls?: SeatControls
+  notice?: string | null // a short note shown on the table for a moment
+  onNoticeShown?: () => void
+}
+
+function Poker({ session, seatControls, notice, onNoticeShown }: PokerProps) {
+  const { game, busy, error, start, act, online } = session
   const dealing = useDealing()
   const user = useAuthStore(s => s.user)
   const [hand, setHand] = useState<{ id?: string; shown: number; stage: Stage }>({ shown: 0, stage: 'play' })
@@ -71,7 +99,12 @@ function OfflinePoker() {
   const view = state ? replay(state, shown) : null
   const next = log[shown]
   const nextBy = next?.playerId ? state?.players.find(p => p.id === next.playerId) : undefined
-  const thinkingId = !dealing && next && nextBy?.isBot && PLAYER_MOVES.has(next.action) ? nextBy.id : null
+  // Online, whoever's turn it is is thinking too.
+  const toAct = caughtUp && !finished && state && state.currentTurnIndex >= 0 ? state.players[state.currentTurnIndex] : undefined
+  const thinkingId =
+    !dealing && next && nextBy?.isBot && PLAYER_MOVES.has(next.action) ? nextBy.id
+    : online && !dealing && toAct && toAct.id !== user?.id ? toAct.id
+    : null
   const contested = view ? Object.values(view.seats).filter(s => s.status === 'active' || s.status === 'all_in').length > 1 : false
 
   // Steps the table forward: the next event of the log, then the end of the
@@ -149,8 +182,9 @@ function OfflinePoker() {
       }
     : view
 
-  const meIndex = Math.max(0, state?.players.findIndex(p => p.id === user?.id) ?? 0)
-  const me = state?.players[meIndex]
+  // Online, someone who joined mid-hand watches until the next one.
+  const meIndex = state?.players.findIndex(p => p.id === user?.id) ?? -1
+  const me = online ? state?.players[meIndex] : state?.players[Math.max(0, meIndex)]
   const mySeat = me ? table?.seats[me.id] : undefined
   const streetBets = table ? Object.values(table.seats).reduce((n, s) => n + s.bet, 0) : 0
   const yourTurn = caughtUp && !finished && (state?.validActions?.length ?? 0) > 0
@@ -161,8 +195,16 @@ function OfflinePoker() {
       ? Object.fromEntries(state.players.filter(p => p.status !== 'out' && (p.id === me?.id || p.chips !== p.startChips)).map(p => [p.id, p.chips - p.startChips]))
       : undefined
 
-  let message = error ?? ''
+  // A notice stays up for a few seconds.
+  useEffect(() => {
+    if (!notice) return
+    const t = setTimeout(() => onNoticeShown?.(), 2500)
+    return () => clearTimeout(t)
+  }, [notice, onNoticeShown])
+
+  let message = error ?? notice ?? ''
   if (!message && !game) message = busy ? 'Shuffling up…' : ''
+  if (!message && online && state && !me) message = "You're in from the next hand"
   if (!message && state && finished && stage !== 'play') {
     const name = (id: string) => (id === me?.id ? 'You' : (state.players.find(p => p.id === id)?.name ?? ''))
     message = (state.winners ?? [])
@@ -192,7 +234,7 @@ function OfflinePoker() {
       pot={table.pot + streetBets}
       actions={yourTurn ? (state.validActions ?? []) : []}
       disabled={busy || dealing}
-      handOver={finished && stage === 'done'}
+      handOver={!online && finished && stage === 'done'}
       onAct={onAct}
       onNextHand={() => start()}
     />
@@ -216,6 +258,7 @@ function OfflinePoker() {
         flights={flights}
         onFlightDone={onFlightDone}
         message={message}
+        seatControls={seatControls}
       />
     </GameShell>
   )
