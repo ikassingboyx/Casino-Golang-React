@@ -12,15 +12,13 @@ const (
 	writeWait      = 10 * time.Second
 	pongWait       = 60 * time.Second
 	pingPeriod     = (pongWait * 9) / 10
-	maxMessageSize = 16 * 1024 // a roulette spin can carry a bet on every spot
+	maxMessageSize = 16 * 1024
 )
 
-// Client is one WebSocket connection of a player to a room. A player may
-// have several (e.g. two tabs); they all get the same updates.
 type Client struct {
 	conn     *websocket.Conn
 	send     chan []byte
-	closed   bool // send is closed; guarded by the room's lock
+	closed   bool
 	PlayerID string
 	room     *Room
 }
@@ -29,7 +27,6 @@ func NewClient(conn *websocket.Conn, playerID string) *Client {
 	return &Client{conn: conn, send: make(chan []byte, 256), PlayerID: playerID}
 }
 
-// Reject tells a client why it can't join and closes the connection.
 func Reject(conn *websocket.Conn, reason string) {
 	conn.SetWriteDeadline(time.Now().Add(writeWait))
 	conn.WriteMessage(websocket.TextMessage, encode(MsgError, ErrorInfo{Message: reason, Fatal: true}))
@@ -37,7 +34,6 @@ func Reject(conn *websocket.Conn, reason string) {
 	conn.Close()
 }
 
-// Run pumps messages both ways until the connection closes.
 func (c *Client) Run() {
 	go c.writePump()
 	c.readPump()
